@@ -6,6 +6,9 @@ This document establishes the collaborative workflow, coding conventions, and en
 
 ## 1. Git Workflow & Version Control
 
+### Issues
+- It is advised for developers to use GitHub feature "Issues" so others can see their current status
+
 ### Branching Strategy
 - **Protected `main` branch:** Direct commits and pushes to `main` are prohibited.
 - All development must take place in isolated, short-lived feature branches.
