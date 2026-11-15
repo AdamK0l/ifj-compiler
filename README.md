@@ -11,6 +11,16 @@ This is a group project focusing on designing a compiler. It is a part of VUTbr 
 ## 📌 Variant
 - **Chosen variant for the symtable:** vv-BVS
 
+## 🧩 Extensions
+- **BOOLTHEN**
+- **CONTROL**
+- **FUNEXP**
+- **VALMEM**
+- **PARAMLISTS**
+- **INTERPOLATEDS**
+- **EXTKW**
+- **LAMBDAS**
+
 ## 🛠️ How to Use
 The project can be built using the standard GNU Make tool:
 ```bash
