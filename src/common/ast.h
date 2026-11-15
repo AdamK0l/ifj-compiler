@@ -1,3 +1,11 @@
+/**
+ * Project: IFJ26 / IAL compiler
+ * File: ast.h
+ * Authors:
+ *   Peter Takáč (xtakacp00)
+ *   Adam Kolacek (xkolaca00)
+ */
+
 #ifndef AST_H
 #define AST_H
 
@@ -284,5 +292,79 @@ typedef struct {
     size_t count;
     size_t capacity;
 }AstProgram;
+
+/* ==================== Type Helper Functions ==================== */
+
+/**
+ * Creates a simple atomic type (Int, Double, String, Boolean, Unit).
+ */
+AstType *ast_type_create(AstTypeKind kind);
+
+/**
+ * Creates a function type (for LAMBDAS extension).
+ */
+AstType *ast_type_create_function(AstType **parameters, size_t parameter_count, AstType *result);
+
+/**
+ * Deep-copies an AstType.
+ */
+AstType *ast_type_clone(const AstType *type);
+
+/**
+ * Compares two types for exact structural equality.
+ */
+bool ast_type_equals(const AstType *a, const AstType *b);
+
+/**
+ * Returns human-readable string representation of a type kind.
+ */
+const char *ast_type_to_string(AstTypeKind kind);
+
+/**
+ * Frees a single AstType structure and its nested function parameters/return types (if any).
+ */
+void ast_type_free(AstType *type);
+
+/* ==================== Memory Deallocation (Destructors) ==================== */
+
+/**
+ * Frees an AstParameterList and its elements.
+ */
+void ast_parameter_list_free(AstParameterList *list);
+
+/**
+ * Frees an AstParameterLists and its parameter lists.
+ */
+void ast_parameter_lists_free(AstParameterLists *lists);
+
+/**
+ * Recursively frees an AstExpression and all its subexpressions, arguments, and evaluated_type.
+ */
+void ast_free_expression(AstExpression *expr);
+
+/**
+ * Recursively frees an AstStatement and its contained expressions and blocks.
+ */
+void ast_free_statement(AstStatement *stmt);
+
+/**
+ * Recursively frees an AstBLOCK and all statements inside it.
+ */
+void ast_free_block(AstBLOCK *block);
+
+/**
+ * Recursively frees an AstFunction, its parameters, return type, and body block.
+ */
+void ast_free_function(AstFunction *func);
+
+/**
+ * Recursively frees an AstExtension and its receiver and methods.
+ */
+void ast_free_extension(AstExtension *ext);
+
+/**
+ * Recursively frees the entire AstProgram and all its definitions.
+ */
+void ast_free_program(AstProgram *program);
 
 #endif
