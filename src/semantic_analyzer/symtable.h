@@ -8,13 +8,9 @@
 #ifndef SYMTABLE_H
 #define SYMTABLE_H
 
+#include "bst.h"
 #include <stdbool.h>
 #include <stddef.h>
-
-/**
- * Forward declaration of the BST node structure (implemented as part of IAL).
- */
-typedef struct BstNode BstNode;
 
 /**
  * Scope structure representing a single lexical block.

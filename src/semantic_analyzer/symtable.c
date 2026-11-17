@@ -7,6 +7,7 @@
 
 #include "symtable.h"
 #include "memory.h"
+#include "bst.h"
 #include <stdlib.h>
 
 Symtable *symtable_create(void) {
@@ -36,7 +37,7 @@ void symtable_pop_scope(Symtable *table) {
     Scope *old_scope = table->current_scope;
     table->current_scope = old_scope->parent;
 
-    // Note: When BST is implemented, old_scope->tree_root will be disposed here via bst_free().
+    bst_free(old_scope->tree_root);
     free(old_scope);
 }
 
