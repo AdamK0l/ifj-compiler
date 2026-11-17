@@ -194,13 +194,67 @@ AstExpression *ast_expr_unary(AstUnaryOp op, AstExpression *operand, position po
     return e;
 }
 
-AstExpression *ast_expr_binary(AstBinaryOp op, AstExpression *left, AstExpression *right,
-                               position pos) {
+AstExpression *ast_expr_binary(AstBinaryOp op, AstExpression *left, AstExpression *right, position pos) {
     AstExpression *e = ast_expr_create(AST_EXPR_BINARY, pos);
     e->data.binary.op = op;
     e->data.binary.left = left;
     e->data.binary.right = right;
     return e;
+}
+
+AstStatement *ast_stmt_create(AstStatementKind kind, position pos) {
+    AstStatement *s = ast_alloc(sizeof *s);
+    s->kind = kind;
+    s->pos = pos;
+    return s;
+}
+
+AstStatement *ast_stmt_variable(char *name, bool is_changeable, AstType *declared_type, AstExpression *initializer, position pos) {
+    AstStatement *s = ast_stmt_create(AST_STATEMENT_VARIABLE, pos);
+    s->data.variable.name = name;
+    s->data.variable.is_changeable = is_changeable;
+    s->data.variable.declared_type = declared_type;
+    s->data.variable.initializer = initializer;
+    return s;
+}
+
+AstStatement *ast_stmt_assign(char *name, AstExpression *value, position pos) {
+    AstStatement *s = ast_stmt_create(AST_STATEMENT_ASSIGN, pos);
+    s->data.assignment.name = name;
+    s->data.assignment.value = value;
+    return s;
+}
+
+AstStatement *ast_stmt_expression(AstExpression *expression, position pos) {
+    AstStatement *s = ast_stmt_create(AST_STATEMENT_EXPRESSION, pos);
+    s->data.expression = expression;
+    return s;
+}
+
+AstStatement *ast_stmt_return(AstExpression *return_value, position pos) {
+    AstStatement *s = ast_stmt_create(AST_STATEMENT_RETURN, pos);
+    s->data.return_value = return_value;
+    return s;
+}
+
+AstStatement *ast_stmt_while(AstExpression *condition, AstBLOCK *inside, position pos){
+    AstStatement *s = ast_stmt_create(AST_STATEMENT_WHILE, pos);
+    s->data.while_loop.condition = condition;
+    s->data.while_loop.inside = inside;
+    return s;
+}
+
+AstStatement *ast_stmt_for(char *variable_name, position variable_pos, AstExpression *from, 
+    AstExpression *to, bool inclusive, AstExpression *step, AstBLOCK *inside, position pos) {
+        AstStatement *s = ast_stmt_create(AST_STATEMENT_FOR, pos);
+        s->data.for_loop.variable_name = variable_name;
+        s->data.for_loop.variable_pos = variable_pos;
+        s->data.for_loop.from = from;
+        s->data.for_loop.to = to;
+        s->data.for_loop.inclusive = inclusive;
+        s->data.for_loop.step = step;
+        s->data.for_loop.inside = inside;
+        return s;
 }
 
 /* ==================== Memory Deallocation (Destructors) ==================== */
