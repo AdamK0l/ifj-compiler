@@ -8,6 +8,34 @@
 #include "scanner.h"
 #include <ctype.h>
 
+// Returns true for space, tab, \r and newline
+static bool _is_whitespace(int c) {
+    return c == ' ' || c == '\t' || c == '\r' || c == '\n';
+}
+
+// Moves to the next character and updates line and column
+static void _next_char(Scanner *scanner) {
+    // At EOF do nothing
+    if (scanner->current == EOF) {
+        return;
+    }
+
+    // At a newline character move to the next line, otherwise move along the current line
+    if (scanner->current == '\n') {
+        scanner->line++;
+        scanner->column = 1;
+    } else {
+        scanner->column++;
+    }
+
+    // Shift the characters, next->current and next->(read a new one)
+    scanner->current = scanner->next;
+    // At EOF dont call fgetc (it would just wait)
+    if (scanner->next != EOF) {
+        scanner->next = fgetc(scanner->input);
+    }
+}
+
 // Prints an error for the current character and returns ERR_LEXICAL
 static ErrorCode _lexical_error(Scanner *scanner) {
     // Position of the wrong character
@@ -63,6 +91,11 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
     // Initialise with empty token
     Token empty = {0};
     *token = empty;
+
+    // for the time being skip all whitespaces
+    while (_is_whitespace(scanner->current)) {
+        _next_char(scanner);
+    }
 
     // The token starts at the current character
     token->line = scanner->line;
