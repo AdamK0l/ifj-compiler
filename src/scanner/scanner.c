@@ -74,6 +74,16 @@ static bool _match(Scanner *scanner, int expected) {
     return true;
 }
 
+// Prints error at the token and returns ERR_LEXICAL
+static ErrorCode _token_error(const Token *token, const char *message) {
+    position pos;
+    pos.line = token->line;
+    pos.column = token->column;
+
+    error_print(ERR_LEXICAL, pos, "%s", message);
+    return ERR_LEXICAL;
+}
+
 ErrorCode scanner_init(Scanner *scanner, FILE *input) {
     // Check function inputs
     if (scanner == NULL || input == NULL) {
@@ -198,6 +208,20 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
             return _operator_token(token, OP_NOT_EQUAL);
         }
         return _operator_token(token, OP_NOT);
+
+    // Logical operators
+    case '&':
+        _next_char(scanner);
+        if (_match(scanner, '&')) {
+            return _operator_token(token, OP_AND);
+        }
+        return _token_error(token, "expected '&&', a single '&' is not allowed");
+    case '|':
+        _next_char(scanner);
+        if (_match(scanner, '|')) {
+            return _operator_token(token, OP_OR);
+        }
+        return _token_error(token, "expected '||', a single '|' is not allowed");
 
     default:
         // for the time being identifiers, numbers and strings are not recognised.
