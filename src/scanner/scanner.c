@@ -52,6 +52,19 @@ static ErrorCode _lexical_error(Scanner *scanner) {
     return ERR_LEXICAL;
 }
 
+// Makes a token of the given type
+static ErrorCode _make_token(Token *token, TokenType type) {
+    token->type = type;
+    return ERR_OK;
+}
+
+// Makes an operator token
+static ErrorCode _operator_token(Token *token, OperatorType operator) {
+    token->type = TOKEN_OPERATOR;
+    token->operator = operator;
+    return ERR_OK;
+}
+
 ErrorCode scanner_init(Scanner *scanner, FILE *input) {
     // Check function inputs
     if (scanner == NULL || input == NULL) {
@@ -107,6 +120,46 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
         return ERR_OK;
     }
 
-    // for the time being no other token is recognised
-    return _lexical_error(scanner);
+    switch (scanner->current) {
+    // Parentheses, for the time being it doesnt handle indentations
+    case '(':
+        _next_char(scanner);
+        return _make_token(token, TOKEN_LEFT_PAREN);
+    case ')':
+        _next_char(scanner);
+        return _make_token(token, TOKEN_RIGHT_PAREN);
+    // Punctuation
+    case ':':
+        _next_char(scanner);
+        return _make_token(token, TOKEN_COLON);
+    case ';':
+        _next_char(scanner);
+        return _make_token(token, TOKEN_SEMICOLON);
+    case ',':
+        _next_char(scanner);
+        return _make_token(token, TOKEN_COMMA);
+    // for the time being doubles with a dot are not recognised
+    case '.':
+        _next_char(scanner);
+        return _make_token(token, TOKEN_DOT);
+
+    // Operators
+    case '+':
+        _next_char(scanner);
+        return _operator_token(token, OP_PLUS);
+    case '-':
+        _next_char(scanner);
+        return _operator_token(token, OP_MINUS);
+    case '*':
+        _next_char(scanner);
+        return _operator_token(token, OP_MUL);
+    // for the time being comments are not recognised
+    case '/':
+        _next_char(scanner);
+        return _operator_token(token, OP_DIV);
+
+    default:
+        // for the time being identifiers, numbers and strings are not recognised.
+        return _lexical_error(scanner);
+    }
 }
