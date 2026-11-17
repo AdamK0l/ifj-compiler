@@ -26,6 +26,7 @@ typedef struct Scope {
  */
 typedef struct Symtable {
     Scope *current_scope;     // Pointer to the currently active innermost scope
+    Scope *global_scope;
 } Symtable;
 
 /**
@@ -56,4 +57,11 @@ void symtable_pop_scope(Symtable *table);
  */
 void symtable_destroy(Symtable *table);
 
+BstNode *symtable_lookup(Symtable *table, const char *name);
+
+BstNode *symtable_lookup_current_scope(Symtable *table, const char *name);
+
+bool symtable_insert_variable(Symtable *table, const char *name, AstType *type, bool is_changeable);
+
+bool symtable_insert_function(Symtable *table, const char *name, AstType *return_type, AstType **param_types, size_t param_count, bool is_builtin);
 #endif // SYMTABLE_H
