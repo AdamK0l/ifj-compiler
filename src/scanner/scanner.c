@@ -65,6 +65,15 @@ static ErrorCode _operator_token(Token *token, OperatorType operator) {
     return ERR_OK;
 }
 
+// If the current character is the expected one eats it, and returns true
+static bool _match(Scanner *scanner, int expected) {
+    if (scanner->current != expected) {
+        return false;
+    }
+    _next_char(scanner);
+    return true;
+}
+
 ErrorCode scanner_init(Scanner *scanner, FILE *input) {
     // Check function inputs
     if (scanner == NULL || input == NULL) {
@@ -157,6 +166,38 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
     case '/':
         _next_char(scanner);
         return _operator_token(token, OP_DIV);
+
+    // Variable length operators
+    case '<':
+        _next_char(scanner);
+        if (_match(scanner, '=')) {
+            return _operator_token(token, OP_LESS_EQUAL);
+        }
+        if (_match(scanner, '-')) {
+            return _operator_token(token, OP_LEFT_ARR);
+        }
+        return _operator_token(token, OP_LESS);
+    case '>':
+        _next_char(scanner);
+        if (_match(scanner, '=')) {
+            return _operator_token(token, OP_GREATER_EQUAL);
+        }
+        return _operator_token(token, OP_GREATER);
+    case '=':
+        _next_char(scanner);
+        if (_match(scanner, '=')) {
+            return _operator_token(token, OP_EQUAL);
+        }
+        if (_match(scanner, '>')) {
+            return _operator_token(token, OP_BIG_ARR);
+        }
+        return _operator_token(token, OP_ASSIGN);
+    case '!':
+        _next_char(scanner);
+        if (_match(scanner, '=')) {
+            return _operator_token(token, OP_NOT_EQUAL);
+        }
+        return _operator_token(token, OP_NOT);
 
     default:
         // for the time being identifiers, numbers and strings are not recognised.
