@@ -5,8 +5,8 @@
  *   Bálint Marcell Šógor (xsogorb00)
  */
 
-#ifndef TOKEN
-#define TOKEN
+#ifndef TOKEN_H
+#define TOKEN_H
 
 #include <stdbool.h>
 
@@ -60,8 +60,8 @@ typedef enum {
     KW_UNIT,
     KW_VAL,
     KW_VAR,
-    // keywords from extentions
-    KW_EXTENTION,
+    // keywords from extensions
+    KW_EXTENSION,
     KW_BOOLEAN,
     KW_TRUE,
     KW_FALSE,
@@ -115,4 +115,4 @@ bool token_is_keyword(const Token *token, KeywordType keyword);
 // returns true if the token type is an operator and there is an operator
 bool token_is_operator(const Token *token, OperatorType operator);
 
-#endif
+#endif // TOKEN_H
