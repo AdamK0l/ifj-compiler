@@ -21,11 +21,11 @@ typedef enum {
     TOKEN_INT_LITERAL,
     TOKEN_DOUBLE_LITERAL,
     TOKEN_STRING_LITERAL,
-    // ifj26 lang keyword
+    // keyword and operator
     TOKEN_KEYWORD,
+    TOKEN_OPERATOR,
     // @main annotation
     TOKEN_AT_MAIN,
-    TOKEN_OPERATOR,
     // structure identifiers
     TOKEN_LEFT_PAREN,
     TOKEN_RIGHT_PAREN,
@@ -44,18 +44,72 @@ typedef enum {
     TOKEN_ISTRING_END
 } TokenType;
 
+typedef enum {
+    // basic keywords
+    KW_IMPORT,
+    KW_DEF,
+    KW_DO,
+    KW_WHILE,
+    KW_IF,
+    KW_ELSE,
+    KW_THEN,
+    KW_INT,
+    KW_DOUBLE,
+    KW_STRING,
+    KW_RETURN,
+    KW_UNIT,
+    KW_VAL,
+    KW_VAR,
+    // keywords from extentions
+    KW_EXTENTION,
+    KW_BOOLEAN,
+    KW_TRUE,
+    KW_FALSE,
+    KW_FOR,
+    KW_CASE,
+    KW_CLASS,
+    KW_LIST,
+    KW_MATCH,
+    KW_TYPE,
+    KW_COUNT,
+} KeywordType;
+
+typedef enum {
+    OP_PLUS,
+    OP_MINUS,
+    OP_MUL,
+    OP_DIV,
+    OP_LESS,
+    OP_LESS_EQUAL,
+    OP_EQUAL,
+    OP_GREATER_EQUAL,
+    OP_GREATER,
+    OP_NOT_EQUAL,
+    OP_ASSIGN,
+    OP_NOT,
+    OP_AND,
+    OP_OR,
+    OP_LEFT_ARR,
+    OP_BIG_ARR,
+    OP_COUNT,
+} OperatorType;
+
 typedef struct {
     TokenType type;
-    char text[64];       // for keywords and operators
-    char *string;        // identifier or string value
-    long long int_value; // value of int (if applicable)
-    double double_value; // value of double (if applicable)
-    int line;            // line of first char in token
-    int column;          // column of first char in token
-    bool newline_before; // true if there was a new line since last token
+    KeywordType keyword;   // valid if type == TOKEN_KEYWORD
+    OperatorType operator; // valid if type == TOKEN_OPERATOR
+    char *string;          // identifier or string value
+    long long int_value;   // value of int (if applicable)
+    double double_value;   // value of double (if applicable)
+    int line;              // line of first char in token
+    int column;            // column of first char in token
+    bool newline_before;   // true if there was a new line since last token
 } Token;
 
 // frees the string of the token
 void token_free(Token *token);
+
+// returns true if the token is a keyword and there is a keyword
+bool token_is_keyword(const Token *token, KeywordType keyword);
 
 #endif

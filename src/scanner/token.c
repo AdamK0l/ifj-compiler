@@ -13,3 +13,7 @@ void token_free(Token *token) {
     free(token->string);
     token->string = NULL;
 }
+
+bool token_is_keyword(const Token *token, KeywordType keyword){
+    return token->type == TOKEN_KEYWORD && token->keyword == keyword;
+}
