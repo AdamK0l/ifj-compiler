@@ -28,4 +28,8 @@ ErrorCode scanner_init(Scanner *scanner, FILE *input);
 // Frees the memory of the scanner
 void scanner_destroy(Scanner *scanner);
 
+// Reads the next token into token, returns: ERR_OK, ERR_LEXICAL, ERR_INTERNAL
+// At EOF returns TOKEN_EOF
+ErrorCode scanner_get_next_token(Scanner *scanner, Token *token);
+
 #endif
