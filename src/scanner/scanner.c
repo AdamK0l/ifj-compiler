@@ -84,6 +84,25 @@ static ErrorCode _token_error(const Token *token, const char *message) {
     return ERR_LEXICAL;
 }
 
+// Reads after '@', only @main is a valid token
+static ErrorCode _read_main(Scanner *scanner, Token *token) {
+    // Collects alphanumeric characters and '_' right after '@' into the buffer
+    dstring_clear(&scanner->buffer);
+    while (isalnum(scanner->current) || scanner->current == '_') {
+        if (!dstring_append_char(&scanner->buffer, (char)scanner->current)) {
+            error_print_no_pos(ERR_INTERNAL, "out of memory");
+            return ERR_INTERNAL;
+        }
+        _next_char(scanner);
+    }
+
+    // The word in the buffer must equal "main", any other form throws an error
+    if (dstring_compare_str(&scanner->buffer, "main") != 0) {
+        return _token_error(token, "expected @main");
+    }
+    return _make_token(token, TOKEN_AT_MAIN);
+}
+
 ErrorCode scanner_init(Scanner *scanner, FILE *input) {
     // Check function inputs
     if (scanner == NULL || input == NULL) {
@@ -222,6 +241,11 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
             return _operator_token(token, OP_OR);
         }
         return _token_error(token, "expected '||', a single '|' is not allowed");
+
+    // The @main annotation
+    case '@':
+        _next_char(scanner);
+        return _read_main(scanner, token);
 
     default:
         // for the time being identifiers, numbers and strings are not recognised.
