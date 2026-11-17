@@ -202,6 +202,23 @@ AstExpression *ast_expr_binary(AstBinaryOp op, AstExpression *left, AstExpressio
     return e;
 }
 
+AstExpression *ast_expr_member(AstExpression *receiver, char *name, position pos){
+    AstExpression *e = ast_expr_create(AST_EXPR_MEMBER, pos);
+    e->data.member.receiver = receiver;
+    e->data.member.name = name;
+    return e;
+}
+
+AstExpression *ast_expr_conditional(AstExpression *condition, AstBLOCK *then_branch, AstBLOCK *else_branch, position pos) {
+    AstExpression *e = ast_expr_create(AST_EXPR_IF, pos);
+    e->data.conditional.condition = condition;
+    e->data.conditional.then_branch = then_branch;
+    e->data.conditional.else_branch = else_branch;
+    return e;
+}
+
+
+
 AstStatement *ast_stmt_create(AstStatementKind kind, position pos) {
     AstStatement *s = ast_alloc(sizeof *s);
     s->kind = kind;
