@@ -19,5 +19,5 @@ bool token_is_keyword(const Token *token, KeywordType keyword) {
 }
 
 bool token_is_operator(const Token *token, OperatorType operator) {
-    return token->type == TOKEN_KEYWORD && token->operator == operator;
+    return token->type == TOKEN_OPERATOR && token->operator == operator;
 }
