@@ -35,7 +35,7 @@ typedef enum {
     TOKEN_DOT,
     // a standalone "_"
     TOKEN_UNDERSCORE,
-    // INTERPOLATEDS extention
+    // INTERPOLATEDS extension
     TOKEN_ISTRING_BEGIN,
     TOKEN_ISTRING_PART,
     TOKEN_ISTRING_ID,
