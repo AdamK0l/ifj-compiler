@@ -14,6 +14,10 @@ void token_free(Token *token) {
     token->string = NULL;
 }
 
-bool token_is_keyword(const Token *token, KeywordType keyword){
+bool token_is_keyword(const Token *token, KeywordType keyword) {
     return token->type == TOKEN_KEYWORD && token->keyword == keyword;
+}
+
+bool token_is_operator(const Token *token, OperatorType operator) {
+    return token->type == TOKEN_KEYWORD && token->operator == operator;
 }
