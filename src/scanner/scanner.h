@@ -25,4 +25,7 @@ typedef struct {
 // Initialises the scanner to read from input, returns ERR_OK or ERR_INTERNAL
 ErrorCode scanner_init(Scanner *scanner, FILE *input);
 
+// Frees the memory of the scanner
+void scanner_destroy(Scanner *scanner);
+
 #endif

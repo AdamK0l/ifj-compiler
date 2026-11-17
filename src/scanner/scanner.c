@@ -32,3 +32,12 @@ ErrorCode scanner_init(Scanner *scanner, FILE *input) {
 
     return ERR_OK;
 }
+
+void scanner_destroy(Scanner *scanner) {
+    if (scanner == NULL) {
+        return;
+    }
+
+    dstring_free(&scanner->buffer);
+    scanner->input = NULL;
+}
