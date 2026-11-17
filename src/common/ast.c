@@ -7,6 +7,7 @@
  */
 
 #include "ast.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -53,7 +54,8 @@ AstType *ast_type_clone(const AstType *type) {
     if (type->kind == AST_TYPE_FUNCTION) {
         clone->function.parameter_count = type->function.parameter_count;
         if (type->function.parameter_count > 0 && type->function.parameters != NULL) {
-            clone->function.parameters = (AstType **)malloc(sizeof(AstType *) * type->function.parameter_count);
+            clone->function.parameters =
+                (AstType **)malloc(sizeof(AstType *) * type->function.parameter_count);
             if (!clone->function.parameters) {
                 free(clone);
                 return NULL;
@@ -96,20 +98,20 @@ bool ast_type_equals(const AstType *a, const AstType *b) {
 
 const char *ast_type_to_string(AstTypeKind kind) {
     switch (kind) {
-        case AST_TYPE_INT:
-            return "Int";
-        case AST_TYPE_DOUBLE:
-            return "Double";
-        case AST_TYPE_STRING:
-            return "String";
-        case AST_TYPE_BOOLEAN:
-            return "Boolean";
-        case AST_TYPE_UNIT:
-            return "Unit";
-        case AST_TYPE_FUNCTION:
-            return "Function";
-        default:
-            return "Unknown";
+    case AST_TYPE_INT:
+        return "Int";
+    case AST_TYPE_DOUBLE:
+        return "Double";
+    case AST_TYPE_STRING:
+        return "String";
+    case AST_TYPE_BOOLEAN:
+        return "Boolean";
+    case AST_TYPE_UNIT:
+        return "Unit";
+    case AST_TYPE_FUNCTION:
+        return "Function";
+    default:
+        return "Unknown";
     }
 }
 
@@ -129,6 +131,76 @@ void ast_type_free(AstType *type) {
     }
 
     free(type);
+}
+
+void *ast_alloc(size_t size) {
+    void *p = calloc(1, size);
+    if (p == NULL) {
+        fprintf(stderr, "Memory allocation error\n");
+        exit(99);
+    }
+    return p;
+}
+
+/*==================== Memory Allocation (Constructors) ====================*/
+
+AstExpression *ast_expr_create(AstExpressionKind kind, position pos) {
+    AstExpression *e = ast_alloc(sizeof *e);
+    e->kind = kind;
+    e->pos = pos;
+    return e;
+}
+
+AstExpression *ast_expr_int(int32_t value, position pos) {
+    AstExpression *e = ast_expr_create(AST_EXPR_INT, pos);
+    e->data.int_value = value;
+    return e;
+}
+
+AstExpression *ast_expr_double(double value, position pos) {
+    AstExpression *e = ast_expr_create(AST_EXPR_DOUBLE, pos);
+    e->data.double_value = value;
+    return e;
+}
+
+AstExpression *ast_expr_unit(position pos) {
+    AstExpression *e = ast_expr_create(AST_EXPR_UNIT, pos);
+    return e;
+}
+
+AstExpression *ast_expr_name(char *name, position pos) {
+    AstExpression *e = ast_expr_create(AST_EXPR_NAME, pos);
+    e->data.name = name;
+    return e;
+}
+
+AstExpression *ast_expr_bool(bool value, position pos) {
+    AstExpression *e = ast_expr_create(AST_EXPR_BOOLEAN, pos);
+    e->data.boolean_value = value;
+    return e;
+}
+
+AstExpression *ast_expr_string(char *data, size_t length, position pos) {
+    AstExpression *s = ast_expr_create(AST_EXPR_STRING, pos);
+    s->data.string_value.data = data;
+    s->data.string_value.length = length;
+    return s;
+}
+
+AstExpression *ast_expr_unary(AstUnaryOp op, AstExpression *operand, position pos) {
+    AstExpression *e = ast_expr_create(AST_EXPR_UNARY, pos);
+    e->data.unary.op = op;
+    e->data.unary.operand = operand;
+    return e;
+}
+
+AstExpression *ast_expr_binary(AstBinaryOp op, AstExpression *left, AstExpression *right,
+                               position pos) {
+    AstExpression *e = ast_expr_create(AST_EXPR_BINARY, pos);
+    e->data.binary.op = op;
+    e->data.binary.left = left;
+    e->data.binary.right = right;
+    return e;
 }
 
 /* ==================== Memory Deallocation (Destructors) ==================== */
@@ -170,75 +242,75 @@ void ast_free_expression(AstExpression *expr) {
     ast_type_free(expr->evaluated_type);
 
     switch (expr->kind) {
-        case AST_EXPR_INT:
-        case AST_EXPR_DOUBLE:
-        case AST_EXPR_BOOLEAN:
-        case AST_EXPR_UNIT:
-            // Primitive literal data requires no extra heap free
-            break;
+    case AST_EXPR_INT:
+    case AST_EXPR_DOUBLE:
+    case AST_EXPR_BOOLEAN:
+    case AST_EXPR_UNIT:
+        // Primitive literal data requires no extra heap free
+        break;
 
-        case AST_EXPR_STRING:
-            free(expr->data.string_value.data);
-            break;
+    case AST_EXPR_STRING:
+        free(expr->data.string_value.data);
+        break;
 
-        case AST_EXPR_NAME:
-            free(expr->data.name);
-            break;
+    case AST_EXPR_NAME:
+        free(expr->data.name);
+        break;
 
-        case AST_EXPR_BINARY:
-            ast_free_expression(expr->data.binary.left);
-            ast_free_expression(expr->data.binary.right);
-            break;
+    case AST_EXPR_BINARY:
+        ast_free_expression(expr->data.binary.left);
+        ast_free_expression(expr->data.binary.right);
+        break;
 
-        case AST_EXPR_UNARY:
-            ast_free_expression(expr->data.unary.operand);
-            break;
+    case AST_EXPR_UNARY:
+        ast_free_expression(expr->data.unary.operand);
+        break;
 
-        case AST_EXPR_CALL:
-            ast_free_expression(expr->data.call.callee);
-            if (expr->data.call.arguments.items != NULL) {
-                for (size_t i = 0; i < expr->data.call.arguments.count; i++) {
-                    AstExpressionList *list = &expr->data.call.arguments.items[i];
-                    if (list->items != NULL) {
-                        for (size_t j = 0; j < list->count; j++) {
-                            ast_free_expression(list->items[j]);
-                        }
-                        free(list->items);
+    case AST_EXPR_CALL:
+        ast_free_expression(expr->data.call.callee);
+        if (expr->data.call.arguments.items != NULL) {
+            for (size_t i = 0; i < expr->data.call.arguments.count; i++) {
+                AstExpressionList *list = &expr->data.call.arguments.items[i];
+                if (list->items != NULL) {
+                    for (size_t j = 0; j < list->count; j++) {
+                        ast_free_expression(list->items[j]);
                     }
+                    free(list->items);
                 }
-                free(expr->data.call.arguments.items);
             }
-            break;
+            free(expr->data.call.arguments.items);
+        }
+        break;
 
-        case AST_EXPR_MEMBER:
-            ast_free_expression(expr->data.member.receiver);
-            free(expr->data.member.name);
-            break;
+    case AST_EXPR_MEMBER:
+        ast_free_expression(expr->data.member.receiver);
+        free(expr->data.member.name);
+        break;
 
-        case AST_EXPR_IF:
-            ast_free_expression(expr->data.conditional.condition);
-            ast_free_block(expr->data.conditional.then_branch);
-            ast_free_block(expr->data.conditional.else_branch);
-            break;
+    case AST_EXPR_IF:
+        ast_free_expression(expr->data.conditional.condition);
+        ast_free_block(expr->data.conditional.then_branch);
+        ast_free_block(expr->data.conditional.else_branch);
+        break;
 
-        case AST_EXPR_LAMBDA:
-            ast_parameter_list_free(&expr->data.lambda.parameters);
-            ast_free_block(expr->data.lambda.inside);
-            break;
+    case AST_EXPR_LAMBDA:
+        ast_parameter_list_free(&expr->data.lambda.parameters);
+        ast_free_block(expr->data.lambda.inside);
+        break;
 
-        case AST_EXPR_INTERPOLATED_STRING:
-            if (expr->data.interpolated_string.items != NULL) {
-                for (size_t i = 0; i < expr->data.interpolated_string.count; i++) {
-                    AstStringPart *part = &expr->data.interpolated_string.items[i];
-                    if (part->kind == AST_STRING_TEXT) {
-                        free(part->data.text.data);
-                    } else if (part->kind == AST_STRING_EXPRESSION) {
-                        ast_free_expression(part->data.expression);
-                    }
+    case AST_EXPR_INTERPOLATED_STRING:
+        if (expr->data.interpolated_string.items != NULL) {
+            for (size_t i = 0; i < expr->data.interpolated_string.count; i++) {
+                AstStringPart *part = &expr->data.interpolated_string.items[i];
+                if (part->kind == AST_STRING_TEXT) {
+                    free(part->data.text.data);
+                } else if (part->kind == AST_STRING_EXPRESSION) {
+                    ast_free_expression(part->data.expression);
                 }
-                free(expr->data.interpolated_string.items);
             }
-            break;
+            free(expr->data.interpolated_string.items);
+        }
+        break;
     }
 
     free(expr);
@@ -250,43 +322,43 @@ void ast_free_statement(AstStatement *stmt) {
     }
 
     switch (stmt->kind) {
-        case AST_STATEMENT_VARIABLE:
-            free(stmt->data.variable.name);
-            ast_type_free(stmt->data.variable.declared_type);
-            ast_free_expression(stmt->data.variable.initializer);
-            break;
+    case AST_STATEMENT_VARIABLE:
+        free(stmt->data.variable.name);
+        ast_type_free(stmt->data.variable.declared_type);
+        ast_free_expression(stmt->data.variable.initializer);
+        break;
 
-        case AST_STATEMENT_ASSIGN:
-            free(stmt->data.assignment.name);
-            ast_free_expression(stmt->data.assignment.value);
-            break;
+    case AST_STATEMENT_ASSIGN:
+        free(stmt->data.assignment.name);
+        ast_free_expression(stmt->data.assignment.value);
+        break;
 
-        case AST_STATEMENT_EXPRESSION:
-            ast_free_expression(stmt->data.expression);
-            break;
+    case AST_STATEMENT_EXPRESSION:
+        ast_free_expression(stmt->data.expression);
+        break;
 
-        case AST_STATEMENT_RETURN:
-            ast_free_expression(stmt->data.return_value);
-            break;
+    case AST_STATEMENT_RETURN:
+        ast_free_expression(stmt->data.return_value);
+        break;
 
-        case AST_STATEMENT_WHILE:
-            ast_free_expression(stmt->data.while_loop.condition);
-            ast_free_block(stmt->data.while_loop.inside);
-            break;
+    case AST_STATEMENT_WHILE:
+        ast_free_expression(stmt->data.while_loop.condition);
+        ast_free_block(stmt->data.while_loop.inside);
+        break;
 
-        case AST_STATEMENT_FOR:
-            free(stmt->data.for_loop.variable_name);
-            ast_free_expression(stmt->data.for_loop.from);
-            ast_free_expression(stmt->data.for_loop.to);
-            ast_free_expression(stmt->data.for_loop.step);
-            ast_free_block(stmt->data.for_loop.inside);
-            if (stmt->data.for_loop.guards.items != NULL) {
-                for (size_t i = 0; i < stmt->data.for_loop.guards.count; i++) {
-                    ast_free_expression(stmt->data.for_loop.guards.items[i]);
-                }
-                free(stmt->data.for_loop.guards.items);
+    case AST_STATEMENT_FOR:
+        free(stmt->data.for_loop.variable_name);
+        ast_free_expression(stmt->data.for_loop.from);
+        ast_free_expression(stmt->data.for_loop.to);
+        ast_free_expression(stmt->data.for_loop.step);
+        ast_free_block(stmt->data.for_loop.inside);
+        if (stmt->data.for_loop.guards.items != NULL) {
+            for (size_t i = 0; i < stmt->data.for_loop.guards.count; i++) {
+                ast_free_expression(stmt->data.for_loop.guards.items[i]);
             }
-            break;
+            free(stmt->data.for_loop.guards.items);
+        }
+        break;
     }
 
     free(stmt);
