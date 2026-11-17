@@ -349,4 +349,18 @@ void ast_free_extension(AstExtension *ext);
  */
 void ast_free_program(AstProgram *program);
 
+// Allocates memory 
+void *ast_alloc(size_t size);
+
+// Expression constructor
+AstExpression *ast_expr_create(AstExpressionKind kind, position pos);
+AstExpression *ast_expr_int(int32_t value, position pos);
+AstExpression *ast_expr_double(double value, position pos);
+AstExpression *ast_expr_unit(position pos);
+AstExpression *ast_expr_name(char *name, position pos);
+AstExpression *ast_expr_bool(bool value, position pos);
+AstExpression *ast_expr_string(char *data, size_t length, position pos);
+AstExpression *ast_expr_unary(AstUnaryOp op, AstExpression *operand, position pos);
+AstExpression *ast_expr_binary(AstBinaryOp op, AstExpression *left, AstExpression *right,position pos);
+
 #endif
