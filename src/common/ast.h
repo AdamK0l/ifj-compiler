@@ -363,4 +363,37 @@ AstExpression *ast_expr_string(char *data, size_t length, position pos);
 AstExpression *ast_expr_unary(AstUnaryOp op, AstExpression *operand, position pos);
 AstExpression *ast_expr_binary(AstBinaryOp op, AstExpression *left, AstExpression *right, position pos);
 
+/* AI-generated (Claude). Prompt: "Generate the declarations for the remaining constructors and list functions in the provided ast.c" */
+
+AstExpression *ast_expr_member(AstExpression *receiver, char *name, position pos);
+AstExpression *ast_expr_conditional(AstExpression *condition, AstBLOCK *then_branch,
+                                    AstBLOCK *else_branch, position pos);
+AstExpression *ast_expr_call(AstExpression *callee, position pos);
+AstExpression *ast_expr_lambda(AstBLOCK *inside, position pos);
+
+// Statement constructors
+AstStatement *ast_stmt_create(AstStatementKind kind, position pos);
+AstStatement *ast_stmt_variable(char *name, bool is_changeable, AstType *declared_type,
+                                AstExpression *initializer, position pos);
+AstStatement *ast_stmt_assign(char *name, AstExpression *value, position pos);
+AstStatement *ast_stmt_expression(AstExpression *expression, position pos);
+AstStatement *ast_stmt_return(AstExpression *return_value, position pos);
+AstStatement *ast_stmt_while(AstExpression *condition, AstBLOCK *inside, position pos);
+AstStatement *ast_stmt_for(char *variable_name, position variable_pos, AstExpression *from,
+                           AstExpression *to, bool inclusive, AstExpression *step,
+                           AstBLOCK *inside, position pos);
+
+// Block and function constructors
+AstBLOCK *ast_block_create(position pos);
+AstFunction *ast_function_create(bool is_main, char *name, AstType *return_type,
+                                 AstBLOCK *inside, position pos);
+
+// Adding to lists
+void ast_stmt_list_push(AstStatementList *list, AstStatement *stmt);
+void ast_expr_list_push(AstExpressionList *list, AstExpression *expr);
+void ast_parameter_list_push(AstParameterList *list, AstParameter param);
+AstParameterList *ast_parameter_lists_push(AstParameterLists *lists);
+AstExpressionList *ast_argument_lists_push(AstArgumentList *lists);
+void ast_definition_push(AstProgram *program, AstDefinition definition);
+
 #endif
