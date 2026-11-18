@@ -27,6 +27,7 @@ typedef struct {
     int indent_count;     // Number of levels on the stack
     int indent_capacity;  // Allocated size of the stack
     bool indent_checked;  // True, if the indentation on the current line was checked
+    int pending_dedents;  // Number of DEDENT tokens that have to be returned
 } Scanner;
 
 // Initialises the scanner to read from input, returns ERR_OK or ERR_INTERNAL

@@ -278,7 +278,24 @@ static ErrorCode _check_indent(Scanner *scanner, Token *token, bool *made_token)
         *made_token = true;
         return _make_token(token, TOKEN_INDENT);
     }
-    // for the time being smaller indent is not handled
+
+    // A smaller indent closes block, there is one DEDENT for every closed level
+    while (indent < scanner->indent_stack[scanner->indent_count - 1]) {
+        scanner->indent_count--;
+        scanner->pending_dedents++;
+    }
+
+    // The indent must be the same as on the outer levels
+    if (indent != scanner->indent_stack[scanner->indent_count - 1]) {
+        return _token_error(token, "indentation does not match any outer level");
+    }
+
+    // The first DEDENT is returned now, others with the next calls
+    if (scanner->pending_dedents > 0) {
+        scanner->pending_dedents--;
+        *made_token = true;
+        return _make_token(token, TOKEN_DEDENT);
+    }
     return ERR_OK;
 }
 
@@ -296,6 +313,7 @@ ErrorCode scanner_init(Scanner *scanner, FILE *input) {
     scanner->parenth_depth = 0;
     scanner->newline_seen = false;
     scanner->indent_checked = false;
+    scanner->pending_dedents = 0;
 
     // Initialise lexem buffer, internal error if it fails
     if (!dstring_init(&scanner->buffer)) {
@@ -445,6 +463,14 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
     // Initialise with empty token
     Token empty = {0};
     *token = empty;
+
+    // DEDENT tokens that are waiting from the last indent check
+    if (scanner->pending_dedents > 0) {
+        scanner->pending_dedents--;
+        token->line = scanner->line;
+        token->column = scanner->column;
+        return _make_token(token, TOKEN_DEDENT);
+    }
 
     // Skips whitespaces and empty lines, line break after a token ends the line with EOL
     while (true) {
