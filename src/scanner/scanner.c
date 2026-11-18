@@ -418,6 +418,12 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
 
     // End of the input, every next call returns TOKEN_EOF
     if (scanner->current == EOF) {
+        // If the last line has no line break at the end, but it still needs EOL before EOF
+        if (scanner->line_has_token) {
+            scanner->line_has_token = false;
+            return _make_token(token, TOKEN_EOL);
+        }
+
         token->type = TOKEN_EOF;
         return ERR_OK;
     }
