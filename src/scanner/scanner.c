@@ -10,6 +10,35 @@
 #include <stdlib.h>
 #include <string.h>
 
+// Text of every keyword, index in the array is its KeywordType
+static const char *const KEYWORD_NAMES[KW_COUNT] = {
+    [KW_IMPORT] = "import",
+    [KW_DEF] = "def",
+    [KW_DO] = "do",
+    [KW_WHILE] = "while",
+    [KW_IF] = "if",
+    [KW_ELSE] = "else",
+    [KW_THEN] = "then",
+    [KW_INT] = "Int",
+    [KW_DOUBLE] = "Double",
+    [KW_STRING] = "String",
+    [KW_RETURN] = "return",
+    [KW_UNIT] = "Unit",
+    [KW_VAL] = "val",
+    [KW_VAR] = "var",
+
+    [KW_EXTENSION] = "extension",
+    [KW_BOOLEAN] = "Boolean",
+    [KW_TRUE] = "true",
+    [KW_FALSE] = "false",
+    [KW_FOR] = "for",
+    [KW_CASE] = "case",
+    [KW_CLASS] = "class",
+    [KW_LIST] = "List",
+    [KW_MATCH] = "match",
+    [KW_TYPE] = "type",
+};
+
 // Returns true for space, tab, \r and newline
 static bool _is_whitespace(int c) {
     return c == ' ' || c == '\t' || c == '\r' || c == '\n';
@@ -131,7 +160,18 @@ static ErrorCode _copy_buffer(Scanner *scanner, Token *token) {
     return ERR_OK;
 }
 
-// Reads the identifier, it must
+// Searches the word in the keyword table, returns tue if it finds it and sets the keyword
+static bool _find_keyword(const DynamicString *word, KeywordType *keyword) {
+    for (int i = 0; i < KW_COUNT; i++) {
+        if (dstring_compare_str(word, KEYWORD_NAMES[i]) == 0) {
+            *keyword = (KeywordType)i;
+            return true;
+        }
+    }
+    return false;
+}
+
+// Reads the identifier or keyword, first character must be a letter or '_'
 static ErrorCode _read_identifier(Scanner *scanner, Token *token) {
     // Collectrs the word int othe buffer
     ErrorCode result = _read_word(scanner);
@@ -142,6 +182,16 @@ static ErrorCode _read_identifier(Scanner *scanner, Token *token) {
     // The '_' is a special token
     if (dstring_compare_str(&scanner->buffer, "_") == 0) {
         return _make_token(token, TOKEN_UNDERSCORE);
+    }
+
+    /* Keywords have the same properties like identifiers (starts with a letter)
+    so we can search them with the same function.
+    */
+    KeywordType keyword;
+    if (_find_keyword(&scanner->buffer, &keyword)) {
+        token->type = TOKEN_KEYWORD;
+        token->keyword = keyword;
+        return ERR_OK;
     }
 
     // The token type is set and the name gets copied into the string of the token
