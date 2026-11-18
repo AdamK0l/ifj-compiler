@@ -182,7 +182,7 @@ static bool _find_keyword(const DynamicString *word, KeywordType *keyword) {
 
 // Reads the identifier or keyword, first character must be a letter or '_'
 static ErrorCode _read_identifier(Scanner *scanner, Token *token) {
-    // Collectrs the word int othe buffer
+    // Collects the word into the buffer
     ErrorCode result = _read_word(scanner);
     if (result != ERR_OK) {
         return result;
@@ -206,6 +206,24 @@ static ErrorCode _read_identifier(Scanner *scanner, Token *token) {
     // The token type is set and the name gets copied into the string of the token
     token->type = TOKEN_IDENTIFIER;
     return _copy_buffer(scanner, token);
+}
+
+// Reads an integer, the first char is a digit
+static ErrorCode _read_number(Scanner *scanner, Token *token) {
+    // Collects the digits into the cleared buffer
+    dstring_clear(&scanner->buffer);
+    while (isdigit(scanner->current)) {
+        ErrorCode result = _add_char(scanner);
+        if (result != ERR_OK) {
+            return result;
+        }
+    }
+
+    // for the time being doubles are not recognised
+    // The text of the number is converted to long long on base 10
+    token->type = TOKEN_INT_LITERAL;
+    token->int_value = strtoll(scanner->buffer.data, NULL, 10);
+    return ERR_OK;
 }
 
 ErrorCode scanner_init(Scanner *scanner, FILE *input) {
@@ -263,8 +281,14 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
         return ERR_OK;
     }
 
+    // For identifiers, they start with a letter or '_'
     if (isalpha(scanner->current) || scanner->current == '_') {
         return _read_identifier(scanner, token);
+    }
+
+    // For numbers that satrt with a digit
+    if (isdigit(scanner->current)) {
+        return _read_number(scanner, token);
     }
 
     switch (scanner->current) {
@@ -357,7 +381,7 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
         return _read_main(scanner, token);
 
     default:
-        // for the time being numbers and strings are not recognised.
+        // for the time being strings are not recognised.
         return _lexical_error(scanner);
     }
 }
