@@ -217,6 +217,17 @@ AstExpression *ast_expr_conditional(AstExpression *condition, AstBLOCK *then_bra
     return e;
 }
 
+AstExpression *ast_expr_call(AstExpression *callee, position pos) {
+    AstExpression *e = ast_expr_create(AST_EXPR_CALL, pos);
+    e->data.call.callee = callee;
+    return e;
+}
+
+AstExpression *ast_expr_lambda(AstBLOCK *inside, position pos){
+    AstExpression *e = ast_expr_create(AST_EXPR_LAMBDA, pos);
+    e->data.lambda.inside = inside;
+    return e;
+}
 
 
 AstStatement *ast_stmt_create(AstStatementKind kind, position pos) {
@@ -330,6 +341,71 @@ void ast_expr_list_push(AstExpressionList *list, AstExpression *expr) {
     list->items[list->count] = expr;
     list->count++;
 
+}
+
+void ast_parameter_list_push(AstParameterList *list, AstParameter param){
+    if(list->count == list->capacity) {
+        size_t new_capacity;
+        if(list->capacity == 0) new_capacity = 4;
+        else new_capacity = list->capacity * 2;
+
+        AstParameter *new_items = realloc(list->items, new_capacity * sizeof *new_items);
+
+        if(new_items == NULL){
+            fprintf(stderr, "Memory allocation error\n");
+            exit(99);
+        }
+        list->items = new_items;
+        list->capacity = new_capacity;
+    }
+    list->items[list->count] = param;
+    list->count++;
+}
+
+AstParameterList *ast_parameter_lists_push(AstParameterLists *lists) {
+    if(lists->count == lists->capacity) {
+        size_t new_capacity;
+        if(lists->capacity == 0) new_capacity = 4;
+        else new_capacity = lists->capacity *2;
+
+        AstParameterList *new_items = realloc(lists->items, new_capacity * sizeof *new_items);
+        if (new_items == NULL) {
+            fprintf(stderr, "Memory allocation error\n");
+            exit(99);
+        }
+        lists->items = new_items;
+        lists->capacity = new_capacity;
+    }
+
+    AstParameterList *added = &lists->items[lists->count];
+    added->items = NULL;
+    added->count = 0;
+    added->capacity = 0;
+    lists->count++;
+    return added;
+}
+
+AstExpressionList *ast_argument_lists_push(AstArgumentList *lists) {
+    if(lists->count == lists->capacity) {
+        size_t new_capacity;
+        if(lists->capacity == 0) new_capacity = 4;
+        else new_capacity = lists->capacity *2;
+
+        AstExpressionList *new_items = realloc(lists->items, new_capacity * sizeof *new_items);
+        if (new_items == NULL) {
+            fprintf(stderr, "Memory allocation error\n");
+            exit(99);
+        }
+        lists->items = new_items;
+        lists->capacity = new_capacity;
+    }
+
+    AstExpressionList *added = &lists->items[lists->count];
+    added->items = NULL;
+    added->count = 0;
+    added->capacity = 0;
+    lists->count++;
+    return added;
 }
 
 /* ==================== Memory Deallocation (Destructors) ==================== */
