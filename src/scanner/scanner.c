@@ -536,6 +536,13 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
         return _token_error(token, "tab is not allowed in indentation");
     }
 
+    if (scanner->parenth_depth > 0 && scanner->at_line_start && scanner->current != ')') {
+        int top = scanner->indent_stack[scanner->indent_count - 1];
+        if (scanner->column - 1 <= top) {
+            return _token_error(token, "continuation line must be indented more");
+        }
+    }
+
     // At the start of a line indentation is checked
     if (!scanner->line_has_token && !scanner->indent_checked) {
         scanner->indent_checked = true;
