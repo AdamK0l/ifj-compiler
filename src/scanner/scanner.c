@@ -247,11 +247,12 @@ ErrorCode scanner_init(Scanner *scanner, FILE *input) {
         return ERR_INTERNAL;
     }
 
-    // Feed the scanner the input and initialise line_has_token bool and line/column counters
+    // Feed the scanner the input and initialise the variables
     scanner->input = input;
     scanner->line = 1;
     scanner->column = 1;
     scanner->line_has_token = false;
+    scanner->parenth_depth = 0;
 
     // Initialise lexem buffer, internal error if it fails
     if (!dstring_init(&scanner->buffer)) {
@@ -400,7 +401,8 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
         }
 
         // If the line had a token, put and EOL token at the line break
-        if (scanner->line_has_token) {
+        // Inside parentheses line break is only whitespace
+        if (scanner->line_has_token && scanner->parenth_depth == 0) {
             token->line = scanner->line;
             token->column = scanner->column;
             _next_char(scanner);
@@ -408,7 +410,7 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
             return _make_token(token, TOKEN_EOL);
         }
 
-        // Empty lines produce nothing
+        // Empty lines and line breaks inside parentheses produce nothing
         _next_char(scanner);
     }
 
@@ -435,5 +437,11 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
 
     // The line has a token now, so the next line break gives EOL
     scanner->line_has_token = true;
+    if (token->type == TOKEN_LEFT_PAREN) {
+        scanner->parenth_depth++;
+    } else if (token->type == TOKEN_RIGHT_PAREN && scanner->parenth_depth > 0) {
+        scanner->parenth_depth--;
+    }
+
     return ERR_OK;
 }
