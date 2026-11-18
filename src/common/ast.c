@@ -292,6 +292,46 @@ AstFunction *ast_function_create(bool is_main, char *name, AstType *return_type,
         return f;
 }
 
+void ast_stmt_list_push(AstStatementList *list, AstStatement *stmt) {
+    if(list->count == list->capacity) {
+        size_t new_capacity;
+        if(list->capacity == 0) new_capacity = 4;
+        else new_capacity = list->capacity * 2;
+
+        AstStatement **new_items = realloc(list->items, new_capacity * sizeof *new_items);
+
+        if(new_items == NULL){
+            fprintf(stderr, "Memory allocation error\n");
+            exit(99);
+        }
+        list->items = new_items;
+        list->capacity = new_capacity;
+    }
+    list->items[list->count] = stmt;
+    list->count++;
+
+}
+
+void ast_expr_list_push(AstExpressionList *list, AstExpression *expr) {
+    if(list->count == list->capacity) {
+        size_t new_capacity;
+        if(list->capacity == 0) new_capacity = 4;
+        else new_capacity = list->capacity * 2;
+
+        AstExpression **new_items = realloc(list->items, new_capacity * sizeof *new_items);
+
+        if(new_items == NULL){
+            fprintf(stderr, "Memory allocation error\n");
+            exit(99);
+        }
+        list->items = new_items;
+        list->capacity = new_capacity;
+    }
+    list->items[list->count] = expr;
+    list->count++;
+
+}
+
 /* ==================== Memory Deallocation (Destructors) ==================== */
 
 void ast_parameter_list_free(AstParameterList *list) {
