@@ -511,6 +511,12 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
             return _make_token(token, TOKEN_EOL);
         }
 
+        // Every block that is still open needs to be closed with DEDENT
+        if (scanner->indent_count > 1) {
+            scanner->indent_count--;
+            return _make_token(token, TOKEN_DEDENT);
+        }
+
         token->type = TOKEN_EOF;
         return ERR_OK;
     }
