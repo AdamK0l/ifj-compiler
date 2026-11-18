@@ -408,6 +408,25 @@ AstExpressionList *ast_argument_lists_push(AstArgumentList *lists) {
     return added;
 }
 
+void ast_definition_push(AstProgram *program, AstDefinition definition) {
+    if(program->count == program->capacity) {
+        size_t new_capacity;
+        if(program->capacity == 0) new_capacity = 4;
+        else new_capacity = program->capacity * 2;
+
+        AstDefinition *new_items = realloc(program->items, new_capacity * sizeof *new_items);
+
+        if(new_items == NULL){
+            fprintf(stderr, "Memory allocation error\n");
+            exit(99);
+        }
+        program->items = new_items;
+        program->capacity = new_capacity;
+    }
+    program->items[program->count] = definition;
+    program->count++;
+}
+
 /* ==================== Memory Deallocation (Destructors) ==================== */
 
 void ast_parameter_list_free(AstParameterList *list) {
