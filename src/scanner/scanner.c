@@ -212,7 +212,7 @@ static ErrorCode _read_identifier(Scanner *scanner, Token *token) {
 static ErrorCode _read_number(Scanner *scanner, Token *token) {
     // This rejects any number that starts with a 0 (01 or 0_1) except the 0 itself
     if (scanner->current == '0' && (isdigit(scanner->next) || scanner->next == '_')) {
-        return _token_error(token, "an integer literal must not start with 0");
+        return _token_error(token, "an integer literal must not have a leading 0");
     }
 
     // Collects the digits into the cleared buffer, '_' is skipped if inside the number
@@ -276,26 +276,8 @@ void scanner_destroy(Scanner *scanner) {
     scanner->input = NULL;
 }
 
-ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
-    // Initialise with empty token
-    Token empty = {0};
-    *token = empty;
-
-    // for the time being skip all whitespaces
-    while (_is_whitespace(scanner->current)) {
-        _next_char(scanner);
-    }
-
-    // The token starts at the current character
-    token->line = scanner->line;
-    token->column = scanner->column;
-
-    // End of the input, every next call returns TOKEN_EOF
-    if (scanner->current == EOF) {
-        token->type = TOKEN_EOF;
-        return ERR_OK;
-    }
-
+// Reads one token from current character, whitespace is already skipped
+static ErrorCode _read_token(Scanner *scanner, Token *token) {
     // For identifiers, they start with a letter or '_'
     if (isalpha(scanner->current) || scanner->current == '_') {
         return _read_identifier(scanner, token);
@@ -399,4 +381,27 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
         // for the time being strings are not recognised.
         return _lexical_error(scanner);
     }
+}
+
+ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
+    // Initialise with empty token
+    Token empty = {0};
+    *token = empty;
+
+    // for the time being skip all whitespaces
+    while (_is_whitespace(scanner->current)) {
+        _next_char(scanner);
+    }
+
+    // The token starts at the current character
+    token->line = scanner->line;
+    token->column = scanner->column;
+
+    // End of the input, every next call returns TOKEN_EOF
+    if (scanner->current == EOF) {
+        token->type = TOKEN_EOF;
+        return ERR_OK;
+    }
+
+    return _read_token(scanner, token);
 }
