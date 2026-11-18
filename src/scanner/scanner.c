@@ -241,6 +241,47 @@ static ErrorCode _read_number(Scanner *scanner, Token *token) {
     return ERR_OK;
 }
 
+// Pushes new indentation level in the stack
+static ErrorCode _push_indent(Scanner *scanner, int indent) {
+    // If the stack is full it gets bigger
+    if (scanner->indent_count == scanner->indent_capacity) {
+        int new_capacity = scanner->indent_capacity * 2;
+        int *new_stack = realloc(scanner->indent_stack, new_capacity * sizeof(int));
+        if (new_stack == NULL) {
+            error_print_no_pos(ERR_INTERNAL, "out of memory");
+            return ERR_INTERNAL;
+        }
+        scanner->indent_stack = new_stack;
+        scanner->indent_capacity = new_capacity;
+    }
+
+    scanner->indent_stack[scanner->indent_count] = indent;
+    scanner->indent_count++;
+    return ERR_OK;
+}
+
+// Compare the indent in the new line with the top of the indent stack
+// made_token is true if an INDENT or DEDENT token was created
+static ErrorCode _check_indent(Scanner *scanner, Token *token, bool *made_token) {
+    *made_token = false;
+
+    // The indent is the number of spaces before the first token in the line
+    int indent = scanner->column - 1;
+    int top = scanner->indent_stack[scanner->indent_count - 1];
+
+    // A bigger indent opens a new block
+    if (indent > top) {
+        ErrorCode result = _push_indent(scanner, indent);
+        if (result != ERR_OK) {
+            return result;
+        }
+        *made_token = true;
+        return _make_token(token, TOKEN_INDENT);
+    }
+    // for the time being smaller indent is not handled
+    return ERR_OK;
+}
+
 ErrorCode scanner_init(Scanner *scanner, FILE *input) {
     // Check function inputs
     if (scanner == NULL || input == NULL) {
@@ -254,11 +295,22 @@ ErrorCode scanner_init(Scanner *scanner, FILE *input) {
     scanner->line_has_token = false;
     scanner->parenth_depth = 0;
     scanner->newline_seen = false;
+    scanner->indent_checked = false;
 
     // Initialise lexem buffer, internal error if it fails
     if (!dstring_init(&scanner->buffer)) {
         return ERR_INTERNAL;
     }
+
+    // Initialise indent stack, starts with level 0
+    scanner->indent_capacity = 8;
+    scanner->indent_stack = malloc(scanner->indent_capacity * sizeof(int));
+    if (scanner->indent_stack == NULL) {
+        dstring_free(&scanner->buffer);
+        return ERR_INTERNAL;
+    }
+    scanner->indent_stack[0] = 0;
+    scanner->indent_count = 1;
 
     // Reading the first 2 characters
     scanner->current = fgetc(input);
@@ -277,6 +329,9 @@ void scanner_destroy(Scanner *scanner) {
 
     dstring_free(&scanner->buffer);
     scanner->input = NULL;
+
+    free(scanner->indent_stack);
+    scanner->indent_stack = NULL;
 }
 
 // Reads one token from current character, whitespace is already skipped
@@ -409,6 +464,7 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
             _next_char(scanner);
             scanner->line_has_token = false;
             scanner->newline_seen = true;
+            scanner->indent_checked = false;
             return _make_token(token, TOKEN_EOL);
         }
 
@@ -431,6 +487,16 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
 
         token->type = TOKEN_EOF;
         return ERR_OK;
+    }
+
+    // At the start of a line indentation is checked
+    if (!scanner->line_has_token && !scanner->indent_checked) {
+        scanner->indent_checked = true;
+        bool made_token;
+        ErrorCode result = _check_indent(scanner, token, &made_token);
+        if (result != ERR_OK || made_token) {
+            return result;
+        }
     }
 
     ErrorCode result = _read_token(scanner, token);

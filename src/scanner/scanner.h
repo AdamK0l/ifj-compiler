@@ -23,6 +23,10 @@ typedef struct {
     bool line_has_token;  // True, if current line has a token
     bool newline_seen;    // True, if there was a line break since last token
     int parenth_depth;    // Number of open parentheses
+    int *indent_stack;    // Indentation levels, bottom is always 0
+    int indent_count;     // Number of levels on the stack
+    int indent_capacity;  // Allocated size of the stack
+    bool indent_checked;  // True, if the indentation on the current line was checked
 } Scanner;
 
 // Initialises the scanner to read from input, returns ERR_OK or ERR_INTERNAL
