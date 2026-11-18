@@ -7,6 +7,8 @@
 
 #include "scanner.h"
 #include <ctype.h>
+#include <stdlib.h>
+#include <string.h>
 
 // Returns true for space, tab, \r and newline
 static bool _is_whitespace(int c) {
@@ -105,8 +107,8 @@ static ErrorCode _read_word(Scanner *scanner) {
 // Reads after '@', only @main is a valid token
 static ErrorCode _read_main(Scanner *scanner, Token *token) {
     // Collects the word after '@' into the buffer
-    ErrorCode result =  _read_word(scanner);
-    if(result != ERR_OK){
+    ErrorCode result = _read_word(scanner);
+    if (result != ERR_OK) {
         return result;
     }
 
@@ -115,6 +117,31 @@ static ErrorCode _read_main(Scanner *scanner, Token *token) {
         return _token_error(token, "expected @main");
     }
     return _make_token(token, TOKEN_AT_MAIN);
+}
+
+// Copies the text from the buffer into the string of the token
+static ErrorCode _copy_buffer(Scanner *scanner, Token *token) {
+    // +1 for '\0'
+    token->string = malloc(scanner->buffer.length + 1);
+    if (token->string == NULL) {
+        error_print_no_pos(ERR_INTERNAL, "out of memory");
+        return ERR_INTERNAL;
+    }
+    strcpy(token->string, scanner->buffer.data);
+    return ERR_OK;
+}
+
+// Reads the identifier, it must
+static ErrorCode _read_identifier(Scanner *scanner, Token *token) {
+    // Collectrs the word int othe buffer
+    ErrorCode result = _read_word(scanner);
+    if (result != ERR_OK) {
+        return result;
+    }
+
+    // The token type is set and the name gets copied into the string of the token
+    token->type = TOKEN_IDENTIFIER;
+    return _copy_buffer(scanner, token);
 }
 
 ErrorCode scanner_init(Scanner *scanner, FILE *input) {
@@ -170,6 +197,10 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
     if (scanner->current == EOF) {
         token->type = TOKEN_EOF;
         return ERR_OK;
+    }
+
+    if (isalpha(scanner->current) || scanner->current == '_') {
+        return _read_identifier(scanner, token);
     }
 
     switch (scanner->current) {
@@ -262,7 +293,7 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
         return _read_main(scanner, token);
 
     default:
-        // for the time being identifiers, numbers and strings are not recognised.
+        // for the time being numbers and strings are not recognised.
         return _lexical_error(scanner);
     }
 }
