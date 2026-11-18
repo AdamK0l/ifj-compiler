@@ -210,10 +210,16 @@ static ErrorCode _read_identifier(Scanner *scanner, Token *token) {
 
 // Reads an integer, the first char is a digit
 static ErrorCode _read_number(Scanner *scanner, Token *token) {
+    // This rejects any number that starts with a 0 (01 or 0_1) except the 0 itself
+    if (scanner->current == '0' && (isdigit(scanner->next) || scanner->next == '_')) {
+        return _token_error(token, "an integer literal must not start with 0");
+    }
+
     // Collects the digits into the cleared buffer, '_' is skipped if inside the number
     dstring_clear(&scanner->buffer);
     while (isdigit(scanner->current) || scanner->current == '_') {
         if (scanner->current == '_') {
+            // There can be multiple '_' between two digits
             while (scanner->current == '_') {
                 _next_char(scanner);
             }
