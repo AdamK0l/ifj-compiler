@@ -116,14 +116,14 @@ static ErrorCode _token_error(const Token *token, const char *message) {
 }
 
 // Returns true if the character is alphanumeric or '_'
-static bool _is_aplhanum(int c) {
+static bool _is_alphanum(int c) {
     return isalnum(c) || c == '_';
 }
 
 // Reads alphanumeric or '_' characters into the buffer
 static ErrorCode _read_word(Scanner *scanner) {
     dstring_clear(&scanner->buffer);
-    while (_is_aplhanum(scanner->current)) {
+    while (_is_alphanum(scanner->current)) {
         if (!dstring_append_char(&scanner->buffer, (char)scanner->current)) {
             error_print_no_pos(ERR_INTERNAL, "out of memory");
             return ERR_INTERNAL;
