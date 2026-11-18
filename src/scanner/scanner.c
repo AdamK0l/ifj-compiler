@@ -210,9 +210,18 @@ static ErrorCode _read_identifier(Scanner *scanner, Token *token) {
 
 // Reads an integer, the first char is a digit
 static ErrorCode _read_number(Scanner *scanner, Token *token) {
-    // Collects the digits into the cleared buffer
+    // Collects the digits into the cleared buffer, '_' is skipped if inside the number
     dstring_clear(&scanner->buffer);
-    while (isdigit(scanner->current)) {
+    while (isdigit(scanner->current) || scanner->current == '_') {
+        if (scanner->current == '_') {
+            while (scanner->current == '_') {
+                _next_char(scanner);
+            }
+            if (!isdigit(scanner->current)) {
+                return _token_error(token, "'_' in a number must be followed by a digit");
+            }
+        }
+
         ErrorCode result = _add_char(scanner);
         if (result != ERR_OK) {
             return result;
