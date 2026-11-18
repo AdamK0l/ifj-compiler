@@ -139,6 +139,11 @@ static ErrorCode _read_identifier(Scanner *scanner, Token *token) {
         return result;
     }
 
+    // The '_' is a special token
+    if (dstring_compare_str(&scanner->buffer, "_") == 0) {
+        return _make_token(token, TOKEN_UNDERSCORE);
+    }
+
     // The token type is set and the name gets copied into the string of the token
     token->type = TOKEN_IDENTIFIER;
     return _copy_buffer(scanner, token);
