@@ -274,6 +274,24 @@ AstStatement *ast_stmt_for(char *variable_name, position variable_pos, AstExpres
         return s;
 }
 
+AstBLOCK *ast_block_create(position pos) {
+    AstBLOCK *b = ast_alloc(sizeof *b);
+    b->pos = pos;
+    return b;
+
+}
+
+AstFunction *ast_function_create(bool is_main, char *name, AstType *return_type, 
+    AstBLOCK *inside, position pos){
+        AstFunction *f = ast_alloc(sizeof *f);
+        f->is_main = is_main;
+        f->name = name;
+        f->return_type = return_type;
+        f->inside = inside;
+        f->pos = pos;
+        return f;
+}
+
 /* ==================== Memory Deallocation (Destructors) ==================== */
 
 void ast_parameter_list_free(AstParameterList *list) {
