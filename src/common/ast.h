@@ -33,8 +33,8 @@ typedef enum{
     AST_TYPE_STRING,
     AST_TYPE_BOOLEAN,
     AST_TYPE_UNIT,
-    AST_TYPE_FUNCTION
-
+    AST_TYPE_FUNCTION,
+    AST_TYPE_ANY
 } AstTypeKind;
 
 typedef enum{
