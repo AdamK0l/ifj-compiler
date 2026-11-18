@@ -115,6 +115,16 @@ static ErrorCode _token_error(const Token *token, const char *message) {
     return ERR_LEXICAL;
 }
 
+// Adds the current character to the buffer and moves to the next one
+static ErrorCode _add_char(Scanner *scanner) {
+    if (!dstring_append_char(&scanner->buffer, (char)scanner->current)) {
+        error_print_no_pos(ERR_INTERNAL, "out of memory");
+        return ERR_INTERNAL;
+    }
+    _next_char(scanner);
+    return ERR_OK;
+}
+
 // Returns true if the character is alphanumeric or '_'
 static bool _is_alphanum(int c) {
     return isalnum(c) || c == '_';
@@ -124,11 +134,10 @@ static bool _is_alphanum(int c) {
 static ErrorCode _read_word(Scanner *scanner) {
     dstring_clear(&scanner->buffer);
     while (_is_alphanum(scanner->current)) {
-        if (!dstring_append_char(&scanner->buffer, (char)scanner->current)) {
-            error_print_no_pos(ERR_INTERNAL, "out of memory");
-            return ERR_INTERNAL;
+        ErrorCode result = _add_char(scanner);
+        if (result != ERR_OK) {
+            return result;
         }
-        _next_char(scanner);
     }
     return ERR_OK;
 }
