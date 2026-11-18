@@ -314,6 +314,8 @@ ErrorCode scanner_init(Scanner *scanner, FILE *input) {
     scanner->newline_seen = false;
     scanner->indent_checked = false;
     scanner->pending_dedents = 0;
+    scanner->at_line_start = true;
+    scanner->tab_in_indent = false;
 
     // Initialise lexem buffer, internal error if it fails
     if (!dstring_init(&scanner->buffer)) {
@@ -476,6 +478,10 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
     while (true) {
         // Spaces, tabs and \r is skipped
         while (_is_whitespace(scanner->current)) {
+            // Tab is not allowed before the first token in the line
+            if (scanner->current == '\t' && scanner->at_line_start) {
+                scanner->tab_in_indent = true;
+            }
             _next_char(scanner);
         }
         if (scanner->current != '\n') {
@@ -491,12 +497,16 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
             scanner->line_has_token = false;
             scanner->newline_seen = true;
             scanner->indent_checked = false;
+            scanner->at_line_start = true;
+            scanner->tab_in_indent = false;
             return _make_token(token, TOKEN_EOL);
         }
 
         // Empty lines and line breaks inside parentheses produce nothing
         _next_char(scanner);
         scanner->newline_seen = true;
+        scanner->at_line_start = true;
+        scanner->tab_in_indent = false;
     }
 
     // The token starts at the current character
@@ -521,6 +531,11 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
         return ERR_OK;
     }
 
+    // Tab is the first token in line and line is not empty
+    if (scanner->tab_in_indent) {
+        return _token_error(token, "tab is not allowed in indentation");
+    }
+
     // At the start of a line indentation is checked
     if (!scanner->line_has_token && !scanner->indent_checked) {
         scanner->indent_checked = true;
@@ -542,6 +557,7 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
     // The parser needs to know if the token is the first one in its line
     token->newline_before = scanner->newline_seen;
     scanner->newline_seen = false;
+    scanner->at_line_start = false;
 
     // Counts the open parentheses, a wrong ')' is reported by the parser
     if (token->type == TOKEN_LEFT_PAREN) {

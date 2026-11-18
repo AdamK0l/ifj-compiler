@@ -28,6 +28,8 @@ typedef struct {
     int indent_capacity;  // Allocated size of the stack
     bool indent_checked;  // True, if the indentation on the current line was checked
     int pending_dedents;  // Number of DEDENT tokens that have to be returned
+    bool at_line_start;   // True, if no token was read on the current line
+    bool tab_in_indent;   // True, if there was a tab before the first token on the line
 } Scanner;
 
 // Initialises the scanner to read from input, returns ERR_OK or ERR_INTERNAL
