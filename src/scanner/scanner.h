@@ -21,6 +21,7 @@ typedef struct {
     int column;           // Column of current character
     DynamicString buffer; // Text we are reading
     bool line_has_token;  // True, if current line has a token
+    bool newline_seen;    // True, if there was a line break since last token
     int parenth_depth;    // Number of open parentheses
 } Scanner;
 

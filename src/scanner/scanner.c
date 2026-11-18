@@ -253,6 +253,7 @@ ErrorCode scanner_init(Scanner *scanner, FILE *input) {
     scanner->column = 1;
     scanner->line_has_token = false;
     scanner->parenth_depth = 0;
+    scanner->newline_seen = false;
 
     // Initialise lexem buffer, internal error if it fails
     if (!dstring_init(&scanner->buffer)) {
@@ -407,11 +408,13 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
             token->column = scanner->column;
             _next_char(scanner);
             scanner->line_has_token = false;
+            scanner->newline_seen = true;
             return _make_token(token, TOKEN_EOL);
         }
 
         // Empty lines and line breaks inside parentheses produce nothing
         _next_char(scanner);
+        scanner->newline_seen = true;
     }
 
     // The token starts at the current character
@@ -437,6 +440,12 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
 
     // The line has a token now, so the next line break gives EOL
     scanner->line_has_token = true;
+
+    // The parser needs to know if the token is the first one in its line
+    token->newline_before = scanner->newline_seen;
+    scanner->newline_seen = false;
+
+    // Counts the open parentheses, a wrong ')' is reported by the parser
     if (token->type == TOKEN_LEFT_PAREN) {
         scanner->parenth_depth++;
     } else if (token->type == TOKEN_RIGHT_PAREN && scanner->parenth_depth > 0) {
