@@ -84,16 +84,30 @@ static ErrorCode _token_error(const Token *token, const char *message) {
     return ERR_LEXICAL;
 }
 
-// Reads after '@', only @main is a valid token
-static ErrorCode _read_main(Scanner *scanner, Token *token) {
-    // Collects alphanumeric characters and '_' right after '@' into the buffer
+// Returns true if the character is alphanumeric or '_'
+static bool _is_aplhanum(int c) {
+    return isalnum(c) || c == '_';
+}
+
+// Reads alphanumeric or '_' characters into the buffer
+static ErrorCode _read_word(Scanner *scanner) {
     dstring_clear(&scanner->buffer);
-    while (isalnum(scanner->current) || scanner->current == '_') {
+    while (_is_aplhanum(scanner->current)) {
         if (!dstring_append_char(&scanner->buffer, (char)scanner->current)) {
             error_print_no_pos(ERR_INTERNAL, "out of memory");
             return ERR_INTERNAL;
         }
         _next_char(scanner);
+    }
+    return ERR_OK;
+}
+
+// Reads after '@', only @main is a valid token
+static ErrorCode _read_main(Scanner *scanner, Token *token) {
+    // Collects the word after '@' into the buffer
+    ErrorCode result =  _read_word(scanner);
+    if(result != ERR_OK){
+        return result;
     }
 
     // The word in the buffer must equal "main", any other form throws an error
