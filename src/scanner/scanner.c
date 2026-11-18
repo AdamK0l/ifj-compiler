@@ -39,9 +39,9 @@ static const char *const KEYWORD_NAMES[KW_COUNT] = {
     [KW_TYPE] = "type",
 };
 
-// Returns true for space, tab, \r and newline
+// Returns true for space, tab, \r
 static bool _is_whitespace(int c) {
-    return c == ' ' || c == '\t' || c == '\r' || c == '\n';
+    return c == ' ' || c == '\t' || c == '\r';
 }
 
 // Moves to the next character and updates line and column
@@ -247,10 +247,11 @@ ErrorCode scanner_init(Scanner *scanner, FILE *input) {
         return ERR_INTERNAL;
     }
 
-    // Feed the scanner the input and initialise line and column counters
+    // Feed the scanner the input and initialise line_has_token bool and line/column counters
     scanner->input = input;
     scanner->line = 1;
     scanner->column = 1;
+    scanner->line_has_token = false;
 
     // Initialise lexem buffer, internal error if it fails
     if (!dstring_init(&scanner->buffer)) {
@@ -388,8 +389,26 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
     Token empty = {0};
     *token = empty;
 
-    // for the time being skip all whitespaces
-    while (_is_whitespace(scanner->current)) {
+    // Skips whitespaces and empty lines, line break after a token ends the line with EOL
+    while (true) {
+        // Spaces, tabs and \r is skipped
+        while (_is_whitespace(scanner->current)) {
+            _next_char(scanner);
+        }
+        if (scanner->current != '\n') {
+            break;
+        }
+
+        // If the line had a token, put and EOL token at the line break
+        if (scanner->line_has_token) {
+            token->line = scanner->line;
+            token->column = scanner->column;
+            _next_char(scanner);
+            scanner->line_has_token = false;
+            return _make_token(token, TOKEN_EOL);
+        }
+
+        // Empty lines produce nothing
         _next_char(scanner);
     }
 
@@ -403,5 +422,12 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
         return ERR_OK;
     }
 
-    return _read_token(scanner, token);
+    ErrorCode result = _read_token(scanner, token);
+    if (result != ERR_OK) {
+        return result;
+    }
+
+    // The line has a token now, so the next line break gives EOL
+    scanner->line_has_token = true;
+    return ERR_OK;
 }

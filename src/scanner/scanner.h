@@ -20,6 +20,7 @@ typedef struct {
     int line;             // Line of current character
     int column;           // Column of current character
     DynamicString buffer; // Text we are reading
+    bool line_has_token;  // True, if current line has a token
 } Scanner;
 
 // Initialises the scanner to read from input, returns ERR_OK or ERR_INTERNAL
