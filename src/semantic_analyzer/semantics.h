@@ -32,4 +32,17 @@ int analyze_semantics(AstProgram *program);
  */
 int semantic_pass1(AstProgram *program, Symtable *table);
 
+/**
+ * Performs Pass 2 of semantic analysis:
+ * - Traverses all user function bodies and statement blocks.
+ * - Manages nested local scopes (variables and parameters).
+ * - Verifies variable definitions, mutability checks (val vs var -> Error 7).
+ * - Verifies condition types in loops, return types, and statement compatibility.
+ *
+ * @param program Pointer to the AST root.
+ * @param table Pointer to the Symtable with populated global scope from Pass 1.
+ * @return 0 (ERR_OK) on success, or ErrorCode on error.
+ */
+int semantic_pass2(AstProgram *program, Symtable *table);
+
 #endif // SEMANTICS_H
