@@ -29,7 +29,13 @@ SUBMIT_DIR = submit
 ARCHIVE = $(SUBMIT_DIR)/$(LOGIN).zip
 PACK_DIR = _pack
 
-.PHONY: all clean format valgrind pack
+.PHONY: all clean format valgrind pack pack-notests pack-tests
+
+# By default include tests unless NO_TESTS=1 is specified
+INCLUDE_TESTS ?= 1
+ifeq ($(NO_TESTS),1)
+INCLUDE_TESTS = 0
+endif
 
 # Default target: build executable
 all: $(TARGET)
@@ -78,7 +84,12 @@ pack: clean
 	[ -f rozdeleni ] && cp rozdeleni $(PACK_DIR)/ || true
 	[ -f rozsireni ] && cp rozsireni $(PACK_DIR)/ || true
 	[ -f dokumentace.pdf ] && cp dokumentace.pdf $(PACK_DIR)/ || true
+ifeq ($(INCLUDE_TESTS),1)
+	@echo "==> Including tests/ in submission package..."
 	[ -d tests ] && cp -r tests $(PACK_DIR)/ || true
+else
+	@echo "==> Omitting tests/ from submission package..."
+endif
 	find $(PACK_DIR) -name '.*' -delete
 	@# 3. Sanity check: verify that flattened sources compile cleanly in _pack/
 	@echo "==> Verifying build of flattened project..."
@@ -98,3 +109,10 @@ pack: clean
 		echo "==> Note: is_it_ok.sh not found in root (download it from course e-learning for final verification)."; \
 	fi
 	@echo "==> Done: Archive $(ARCHIVE) has been successfully created and verified."
+
+# Convenience targets for packaging with or without tests
+pack-notests:
+	@$(MAKE) pack INCLUDE_TESTS=0
+
+pack-tests:
+	@$(MAKE) pack INCLUDE_TESTS=1
