@@ -533,6 +533,8 @@ ErrorCode scanner_init(Scanner *scanner, FILE *input) {
     scanner->tab_in_indent = false;
     scanner->line_indent = -1;
     scanner->after_comment = false;
+    scanner->istring_depth = 0;
+    scanner->istring_end_pending = false;
 
     // Initialise lexem buffer, internal error if it fails
     if (!dstring_init(&scanner->buffer)) {
