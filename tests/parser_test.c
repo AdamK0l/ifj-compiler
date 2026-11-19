@@ -1,4 +1,7 @@
-/* Parser test driver: parses the IFJ26 source on stdin and returns the error code. */
+/* Parser test driver: parses the IFJ26 source on stdin and returns the error code. 
+ * Parser test driver: parses the IFJ26 source on stdin and prints the result code.
+ * Build and run all parser tests: bash tests/run_parser_tests.sh
+ * */
 #include "parser_internal.h"
 #include <stdio.h>
 
