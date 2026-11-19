@@ -199,9 +199,9 @@ int semantic_pass1(AstProgram *program, Symtable *table) {
 
 /* ==================== Pass 2 Implementation ==================== */
 
-static int _check_statement(AstStatement *stmt, Symtable *table, AstType *enclosing_return_type, AstType **out_type);
+int check_statement(AstStatement *stmt, Symtable *table, AstType *enclosing_return_type, AstType **out_type);
 
-static int _check_block(AstBLOCK *block, Symtable *table, AstType *enclosing_return_type, AstType **out_block_type) {
+int check_block(AstBLOCK *block, Symtable *table, AstType *enclosing_return_type, AstType **out_block_type) {
     if (!block) {
         if (out_block_type) {
             *out_block_type = type_get_unit();
@@ -216,7 +216,7 @@ static int _check_block(AstBLOCK *block, Symtable *table, AstType *enclosing_ret
         if (!stmt) continue;
 
         AstType *stmt_type = NULL;
-        int res = _check_statement(stmt, table, enclosing_return_type, &stmt_type);
+        int res = check_statement(stmt, table, enclosing_return_type, &stmt_type);
         if (res != ERR_OK) {
             return res;
         }
@@ -234,7 +234,7 @@ static int _check_block(AstBLOCK *block, Symtable *table, AstType *enclosing_ret
     return ERR_OK;
 }
 
-static int _check_statement(AstStatement *stmt, Symtable *table, AstType *enclosing_return_type, AstType **out_type) {
+int check_statement(AstStatement *stmt, Symtable *table, AstType *enclosing_return_type, AstType **out_type) {
     if (!stmt || !table) {
         return ERR_INTERNAL;
     }
@@ -333,7 +333,7 @@ static int _check_statement(AstStatement *stmt, Symtable *table, AstType *enclos
             }
 
             symtable_push_scope(table);
-            res = _check_block(stmt->data.while_loop.inside, table, enclosing_return_type, NULL);
+            res = check_block(stmt->data.while_loop.inside, table, enclosing_return_type, NULL);
             symtable_pop_scope(table);
             if (res != ERR_OK) {
                 return res;
@@ -416,7 +416,7 @@ static int _check_statement(AstStatement *stmt, Symtable *table, AstType *enclos
                 }
             }
 
-            res = _check_block(stmt->data.for_loop.inside, table, enclosing_return_type, NULL);
+            res = check_block(stmt->data.for_loop.inside, table, enclosing_return_type, NULL);
             symtable_pop_scope(table);
             if (res != ERR_OK) return res;
 
@@ -458,7 +458,7 @@ int semantic_pass2(AstProgram *program, Symtable *table) {
 
         // Check function body block
         AstType *body_return_type = NULL;
-        int res = _check_block(func->inside, table, func->return_type, &body_return_type);
+        int res = check_block(func->inside, table, func->return_type, &body_return_type);
         if (res != ERR_OK) {
             symtable_pop_scope(table);
             return res;
