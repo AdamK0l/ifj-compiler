@@ -108,6 +108,8 @@ const char *ast_type_to_string(AstTypeKind kind) {
             return "Unit";
         case AST_TYPE_FUNCTION:
             return "Function";
+        case AST_TYPE_ANY:
+            return "Any";
         default:
             return "Unknown";
     }
