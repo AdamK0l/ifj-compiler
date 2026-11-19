@@ -208,15 +208,8 @@ static ErrorCode _read_identifier(Scanner *scanner, Token *token) {
     return _copy_buffer(scanner, token);
 }
 
-// Reads an integer, the first char is a digit
-static ErrorCode _read_number(Scanner *scanner, Token *token) {
-    // This rejects any number that starts with a 0 (01 or 0_1) except the 0 itself
-    if (scanner->current == '0' && (isdigit(scanner->next) || scanner->next == '_')) {
-        return _token_error(token, "an integer literal must not have a leading 0");
-    }
-
-    // Collects the digits into the cleared buffer, '_' is skipped if inside the number
-    dstring_clear(&scanner->buffer);
+// Reads digit into buffer, '_' between digits is skipped
+static ErrorCode _read_digits(Scanner *scanner, Token *token) {
     while (isdigit(scanner->current) || scanner->current == '_') {
         if (scanner->current == '_') {
             // There can be multiple '_' between two digits
@@ -232,6 +225,22 @@ static ErrorCode _read_number(Scanner *scanner, Token *token) {
         if (result != ERR_OK) {
             return result;
         }
+    }
+    return ERR_OK;
+}
+
+// Reads an integer, the first char is a digit
+static ErrorCode _read_number(Scanner *scanner, Token *token) {
+    // This rejects any number that starts with a 0 (01 or 0_1) except the 0 itself
+    if (scanner->current == '0' && (isdigit(scanner->next) || scanner->next == '_')) {
+        return _token_error(token, "an integer literal must not have a leading 0");
+    }
+
+    // Collects the digits into the cleared buffer
+    dstring_clear(&scanner->buffer);
+    ErrorCode result = _read_digits(scanner, token);
+    if (result != ERR_OK) {
+        return result;
     }
 
     // for the time being doubles are not recognised
