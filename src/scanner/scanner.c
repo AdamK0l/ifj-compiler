@@ -300,6 +300,43 @@ static ErrorCode _check_indent(Scanner *scanner, Token *token, bool *made_token)
     return ERR_OK;
 }
 
+// Skips block comments, nested comments are allowed
+// had_newline is true, if there was a line break inside the comment
+static ErrorCode _skip_block_comment(Scanner *scanner, Token *token, bool *had_newline) {
+    // An error is reported at the start of the comment
+    token->line = scanner->line;
+    token->column = scanner->column;
+    *had_newline = false;
+
+    // Skips the opening tag (/*)
+    _next_char(scanner);
+    _next_char(scanner);
+    int depth = 1;
+
+    // The depth counts open comments, it ends when it goes back to 0
+    while (depth > 0) {
+        if (scanner->current == EOF) {
+            return _token_error(token, "unterminated block comment");
+        }
+
+        if (scanner->current == '/' && scanner->next == '*') {
+            _next_char(scanner);
+            _next_char(scanner);
+            depth++;
+        } else if (scanner->current == '*' && scanner->next == '/') {
+            _next_char(scanner);
+            _next_char(scanner);
+            depth--;
+        } else {
+            if (scanner->current == '\n') {
+                *had_newline = true;
+            }
+            _next_char(scanner);
+        }
+    }
+    return ERR_OK;
+}
+
 ErrorCode scanner_init(Scanner *scanner, FILE *input) {
     // Check function inputs
     if (scanner == NULL || input == NULL) {
@@ -496,6 +533,17 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
             while (scanner->current != '\n' && scanner->current != EOF) {
                 _next_char(scanner);
             }
+            continue;
+        }
+
+        //
+        if (scanner->current == '/' && scanner->next == '*') {
+            bool had_newline;
+            ErrorCode result = _skip_block_comment(scanner, token, &had_newline);
+            if (result != ERR_OK) {
+                return result;
+            }
+            // for the time being a line break inside a comment is whitespace
             continue;
         }
 
