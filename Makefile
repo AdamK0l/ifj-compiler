@@ -8,7 +8,7 @@ CFLAGS ?= -std=c99 -Wall -Wextra -pedantic -g
 LDFLAGS ?=
 
 # Header search paths for modular development
-INCLUDES = -Isrc -Isrc/common -Isrc/scanner -Isrc/parser -Isrc/semantics -Isrc/semantic_analyzer -Isrc/codegen
+INCLUDES = -Isrc -Isrc/common -Isrc/scanner -Isrc/parser -Isrc/semantics -Isrc/semantic_analyzer -Isrc/codegen -Isrc/generator
 
 # Automatic dependency tracking (.d files)
 DEPFLAGS = -MMD -MP
@@ -25,7 +25,8 @@ DEPS = $(OBJS:.o=.d)
 
 # Student login for submission archive naming
 LOGIN = xkolaca00
-ARCHIVE = $(LOGIN).zip
+SUBMIT_DIR = submit
+ARCHIVE = $(SUBMIT_DIR)/$(LOGIN).zip
 PACK_DIR = _pack
 
 .PHONY: all clean format valgrind pack
@@ -46,7 +47,7 @@ build/%.o: %.c
 
 # Clean up generated artifacts
 clean:
-	rm -rf build $(TARGET) $(PACK_DIR) $(ARCHIVE)
+	rm -rf build $(TARGET) $(PACK_DIR) $(ARCHIVE) $(LOGIN).zip
 
 # Format codebase according to .clang-format
 format:
@@ -68,6 +69,7 @@ pack: clean
 	fi
 	@echo "==> Preparing submission package $(ARCHIVE)..."
 	rm -rf $(PACK_DIR) $(ARCHIVE)
+	mkdir -p $(SUBMIT_DIR)
 	mkdir -p $(PACK_DIR)/src
 	@# 1. Copy all .c and .h files directly into _pack/src (flattening)
 	find src -type f \( -name '*.c' -o -name '*.h' \) -exec cp {} $(PACK_DIR)/src/ \;

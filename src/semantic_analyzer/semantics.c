@@ -166,7 +166,7 @@ int semantic_pass1(AstProgram *program, Symtable *table) {
 
             // If return type is not explicitly written, default it to Unit
             if (func->return_type == NULL) {
-                func->return_type = &type_unit;
+                func->return_type = ast_type_create(AST_TYPE_UNIT);
             }
 
             main_count++;
