@@ -257,7 +257,31 @@ static ErrorCode _read_number(Scanner *scanner, Token *token) {
         }
     }
 
-    // for the time being exponent and the d suffix are not recognised
+    // The exponent (e or E with optional + and - and at least one digit)
+    if (scanner->current == 'e' || scanner->current == 'E') {
+        is_double = true;
+        result = _add_char(scanner);
+        if (result != ERR_OK) {
+            return result;
+        }
+
+        if (scanner->current == '+' || scanner->current == '-') {
+            result = _add_char(scanner);
+            if (result != ERR_OK) {
+                return result;
+            }
+        }
+
+        // Only one character can be looked ahead (1e, 1e+ are errors)
+        if (!isdigit(scanner->current)) {
+            return _token_error(token, "exponent of a number must have at least one digit");
+        }
+        result = _read_digits(scanner, token);
+        if (result != ERR_OK) {
+            return result;
+        }
+    }
+
     // The text of the number is converted into its value
     if (is_double) {
         token->type = TOKEN_DOUBLE_LITERAL;
