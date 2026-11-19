@@ -208,6 +208,42 @@ static ErrorCode _read_identifier(Scanner *scanner, Token *token) {
     return _copy_buffer(scanner, token);
 }
 
+// Reads the escape sequence and adds the decoded character to the buffer
+// only \\ \" \n \r \t are allowed
+static ErrorCode _read_escape(Scanner *scanner, Token *token) {
+    // Skips the first '\'
+    _next_char(scanner);
+
+    // The two characters of the escame sequence become one real character
+    char decoded;
+    switch (scanner->current) {
+    case '\\':
+        decoded = '\\';
+        break;
+    case '"':
+        decoded = '"';
+        break;
+    case 'n':
+        decoded = '\n';
+        break;
+    case 'r':
+        decoded = '\r';
+        break;
+    case 't':
+        decoded = '\t';
+        break;
+    default:
+        return _token_error(token, "invalid escape sequence in a string literal");
+    }
+    _next_char(scanner);
+
+    if (!dstring_append_char(&scanner->buffer, decoded)) {
+        error_print_no_pos(ERR_INTERNAL, "out of memory");
+        return ERR_INTERNAL;
+    }
+    return ERR_OK;
+}
+
 // Reads string literal
 static ErrorCode _read_string(Scanner *scanner, Token *token) {
     // Skips the first '"', text of the string is collected into the buffer
@@ -220,8 +256,14 @@ static ErrorCode _read_string(Scanner *scanner, Token *token) {
             return _token_error(token, "unterminated string literal");
         }
 
-        // for the time being escape sequences are not handled
-        ErrorCode result = _add_char(scanner);
+        // An escape sequence is decoded, any other character added as it is
+        ErrorCode result;
+        if (scanner->current == '\\') {
+            result = _read_escape(scanner, token);
+        } else {
+            result = _add_char(scanner);
+        }
+
         if (result != ERR_OK) {
             return result;
         }
