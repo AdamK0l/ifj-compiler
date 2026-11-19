@@ -1,0 +1,27 @@
+1.  <program>     	    -> <prolog> <definitions> EOF
+2.  <prolog>      	    -> IMPORT ID DOT MUL EOL
+3.  <definitions> 	    -> <function> <definitions>      		        PREDICT: { DEF, AT_MAIN }
+4.  <definitions>	    -> ε                             		        PREDICT: { EOF }
+5.  <function> 		    -> <opt_main> DEF ID LEFT_PAREN <parameters> RIGHT_PAREN <opt_type> ASSIGN EOL <block>
+5.1 <opt_main>		    -> AT_MAIN <opt_eol>				            PREDICT: { AT_MAIN }
+5.2 <opt_main>		    -> epsilon					                    PREDICT: { DEF }
+5.3 <opt_eol>		    -> EOL						                    PREDICT: { EOL }
+5.4 <opt_eol>		    -> epsilon					                    PREDICT: { DEF }
+6.  <opt_type>		    -> COLON <type>					                PREDICT: { COLON }
+7.  <opt_type>		    -> epsilon					                    PREDICT: { ASSIGN }
+8.  <type>		        -> INT						                    PREDICT: { INT }
+9.  <type>		        -> DOUBLE					                    PREDICT: { DOUBLE }
+10. <type>		        -> STRING					                    PREDICT: { STRING }
+11. <type>		        -> UNIT						                    PREDICT: { UNIT }
+12. <type>		        -> BOOLEAN					                    PREDICT: { BOOLEAN }
+13. <parameters>	    -> <parameter> <parameters_next>		        PREDICT: { ID }
+14. <parameters>	    -> epsilon					                    PREDICT: { RIGHT_PAREN }
+15. <parameters_next>	-> COMMA <parameter> <parameters_next>		    PREDICT: { COMMA }
+16. <parameters_next>	-> epsilon					                    PREDICT: { RIGHT_PAREN }
+17. <parameter> 	    -> ID COLON <type>
+18. <block>		        -> INDENT <statement> <statement_next> DEDENT
+19. <statement_next>	-> <statement> <statement_next>			        PREDICT: { VAR, VAL }
+20. <statement_next> 	-> epsilon 					                    PREDICT:{ DEDENT } 
+21. <statement>		    -> <var_def> EOL
+22. <var_def>		    -> VAR ID <opt_type> ASSIGN expr		        PREDICT: { VAR }
+23. <var_def>		    -> VAL ID <opt_type> ASSIGN expr		        PREDICT: { VAL }
