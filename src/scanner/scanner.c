@@ -282,6 +282,12 @@ static ErrorCode _read_number(Scanner *scanner, Token *token) {
         }
     }
 
+    // The d or D suffix makes a double
+    if (scanner->current == 'd' || scanner->current == 'D') {
+        is_double = true;
+        _next_char(scanner);
+    }
+
     // The text of the number is converted into its value
     if (is_double) {
         token->type = TOKEN_DOUBLE_LITERAL;
