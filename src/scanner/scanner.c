@@ -376,7 +376,24 @@ static ErrorCode _read_istring_text(Scanner *scanner, Token *token) {
         return _make_token(token, TOKEN_ISTRING_END);
     }
 
-    // for the time being $name and ${..} are not recognised
+    // $name is the value of the variable
+    if (scanner->current == '$' && (isalpha(scanner->next) || scanner->next == '_')) {
+        _next_char(scanner);
+        ErrorCode result = _read_word(scanner);
+        if (result != ERR_OK) {
+            return result;
+        }
+
+        KeywordType keyword;
+        if (dstring_compare_str(&scanner->buffer, "_") == 0 ||
+            _find_keyword(&scanner->buffer, &keyword)) {
+            return _token_error(token, "$ must be followed by a variable name");
+        }
+        token->type = TOKEN_ISTRING_ID;
+        return _copy_buffer(scanner, token);
+    }
+
+    // for the time being ${..} is not recognised
     // A standalone $ must be followed by a variable name or '{'
     if (scanner->current == '$' && scanner->next != '$') {
         return _token_error(token, "invalid use of '$' in interpolated string");
