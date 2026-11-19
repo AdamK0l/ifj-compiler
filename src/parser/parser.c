@@ -40,6 +40,11 @@ bool check_keyword(Parser *p, KeywordType kw){
     return b;
 }
 
+bool check_operator(Parser *p, OperatorType op){
+    bool b = token_is_operator(&p->current, op);
+    return b;
+}
+
 /* ==================== Error handling ==================== */
 
 /* Reports the first syntax error and sets ERR_SYNTAX. */
@@ -65,10 +70,7 @@ bool parser_expect(Parser *p, TokenType type, const char *expected){
     }
 }
 
-bool check_operator(Parser *p, OperatorType op){
-    bool b = token_is_operator(&p->current, op);
-    return b;
-}
+
 
 bool parser_expect_keyword(Parser *p, KeywordType type, const char *expected){
     if (check_keyword(p, type)){
@@ -92,6 +94,20 @@ bool parser_expect_operator(Parser *p, OperatorType type, const char *expected){
 
 /* ==================== Parse functions ==================== */
 
+ErrorCode parser_run(Scanner *scanner) {
+    Parser p;
+    p.scanner = scanner;
+    p.error = ERR_OK;
+    p.current.string = NULL;
+
+    advance(&p);
+    parse_program(&p);
+
+    token_free(&p.current);
+    return p.error;
+}
+
+
 /* 2. <prolog> -> IMPORT ID DOT MUL EOL */
 bool parse_prolog(Parser *p){
     if(!parser_expect_keyword(p, KW_IMPORT, "'import'")) return false;
@@ -106,3 +122,83 @@ bool parse_prolog(Parser *p){
     if(!parser_expect(p, TOKEN_EOL, "end of line")) return false;
     return true;
 }
+
+/*1.  <program> -> <prolog> <definitions> EOF */
+bool parse_program(Parser *p){
+    if(!parse_prolog(p)) return false;
+
+    if(!parse_definitions(p)) return false;
+
+    if(!parser_expect(p, TOKEN_EOF, "end of file")) return false;
+    return true;
+}
+
+/* 3. <definitions> -> <function> <definitions>   PREDICT: { DEF, AT_MAIN }
+   4. <definitions> -> ε                          PREDICT: { EOF } */
+bool parse_definitions(Parser *p) {
+    if(check_keyword(p, KW_DEF) || check(p, TOKEN_AT_MAIN)){
+        if(!parse_function(p)) return false;
+        return parse_definitions(p);
+
+    }
+    if(check(p, TOKEN_EOF)) {
+        return true;
+    }
+    return syntax_error(p, "'def' or end of file");
+}
+
+/* 5. <function> -> <opt_main> DEF ID ( <parameters> ) <opt_type> ASSIGN EOL <block> */
+bool parse_function(Parser *p){
+    if(!parse_opt_main(p)) return false;
+
+    if(!parser_expect_keyword(p, KW_DEF, "'def'")) return false;
+
+    if(!check(p, TOKEN_IDENTIFIER)) return syntax_error(p, "function name");
+    char *name = take_string(p);
+    advance(p);
+    free(name);
+
+    if(!parser_expect(p, TOKEN_LEFT_PAREN, "'('")) return false;
+
+    if(!parse_parameters(p)) return false;
+
+    if(!parser_expect(p, TOKEN_RIGHT_PAREN, "')'")) return false;
+
+    if(!parse_opt_type(p)) return false;
+
+    if(!parser_expect_operator(p, OP_ASSIGN, "'='")) return false;
+
+    if(!parser_expect(p, TOKEN_EOL, "end of line")) return false;
+
+    if(!parse_block(p)) return false;
+
+    return true;
+}
+
+bool parse_parameters(Parser *p){
+    (void)p; return true;
+}
+
+bool parse_opt_main(Parser *p){
+    if(check(p, TOKEN_AT_MAIN)) {
+        advance(p);
+        if(check(p, TOKEN_EOL)) {
+            advance(p);
+        }
+        return true;
+    }
+    if (check_keyword(p, KW_DEF)) {
+        return true;
+    }
+    return syntax_error(p, "'@main' or 'def'");
+
+}
+
+bool parse_opt_type(Parser *p){
+    (void)p; return true;
+}
+
+bool parse_block(Parser *p){
+    (void)p; return true;
+}
+
