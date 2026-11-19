@@ -6,6 +6,7 @@
  */
 
 #include "type_checker.h"
+#include "semantics.h"
 #include "errors.h"
 #include <string.h>
 
@@ -330,6 +331,49 @@ int check_expression(AstExpression *expr, Symtable *table, AstType **out_type) {
                 }
             }
             *out_type = type_get_string();
+            break;
+        }
+
+        case AST_EXPR_IF: {
+            AstType *cond_type = NULL;
+            res = check_expression(expr->data.conditional.condition, table, &cond_type);
+            if (res != ERR_OK) return res;
+
+            if (cond_type->kind != AST_TYPE_BOOLEAN) {
+                error_print(ERR_SEM_TYPE, expr->pos,
+                            "Condition in 'if' expression must be Boolean, but got '%s'",
+                            ast_type_to_string(cond_type->kind));
+                return ERR_SEM_TYPE;
+            }
+
+            symtable_push_scope(table);
+            AstType *then_type = NULL;
+            res = check_block(expr->data.conditional.then_branch, table, NULL, &then_type);
+            symtable_pop_scope(table);
+            if (res != ERR_OK) return res;
+
+            if (expr->data.conditional.else_branch != NULL) {
+                symtable_push_scope(table);
+                AstType *else_type = NULL;
+                res = check_block(expr->data.conditional.else_branch, table, NULL, &else_type);
+                symtable_pop_scope(table);
+                if (res != ERR_OK) return res;
+
+                if (ast_type_equals(then_type, else_type)) {
+                    *out_type = then_type;
+                } else if (type_is_numeric(then_type) && type_is_numeric(else_type)) {
+                    *out_type = type_get_double();
+                } else {
+                    error_print(ERR_SEM_TYPE, expr->pos,
+                                "Incompatible branch types in 'if' expression: then '%s', else '%s'",
+                                ast_type_to_string(then_type->kind),
+                                ast_type_to_string(else_type->kind));
+                    return ERR_SEM_TYPE;
+                }
+            } else {
+                // BOOLTHEN: Missing else branch defaults to Unit ()
+                *out_type = type_get_unit();
+            }
             break;
         }
 
