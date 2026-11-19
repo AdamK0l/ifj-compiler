@@ -1,0 +1,1046 @@
+/**
+ * Project: IFJ26 / IAL compiler
+ * File: scanner.c
+ * Authors:
+ *   Bálint Marcell Šógor (xsogorb00)
+ */
+
+#include "scanner.h"
+#include <ctype.h>
+#include <stdlib.h>
+#include <string.h>
+
+// Text of every keyword, index in the array is its KeywordType
+static const char *const KEYWORD_NAMES[KW_COUNT] = {
+    [KW_IMPORT] = "import",
+    [KW_DEF] = "def",
+    [KW_DO] = "do",
+    [KW_WHILE] = "while",
+    [KW_IF] = "if",
+    [KW_ELSE] = "else",
+    [KW_THEN] = "then",
+    [KW_INT] = "Int",
+    [KW_DOUBLE] = "Double",
+    [KW_STRING] = "String",
+    [KW_RETURN] = "return",
+    [KW_UNIT] = "Unit",
+    [KW_VAL] = "val",
+    [KW_VAR] = "var",
+
+    [KW_EXTENSION] = "extension",
+    [KW_BOOLEAN] = "Boolean",
+    [KW_TRUE] = "true",
+    [KW_FALSE] = "false",
+    [KW_FOR] = "for",
+    [KW_CASE] = "case",
+    [KW_CLASS] = "class",
+    [KW_LIST] = "List",
+    [KW_MATCH] = "match",
+    [KW_TYPE] = "type",
+};
+
+// Returns true for space, tab, \r
+static bool _is_whitespace(int c) {
+    return c == ' ' || c == '\t' || c == '\r';
+}
+
+// Moves to the next character and updates line and column
+static void _next_char(Scanner *scanner) {
+    // At EOF do nothing
+    if (scanner->current == EOF) {
+        return;
+    }
+
+    // At a newline character move to the next line, otherwise move along the current line
+    if (scanner->current == '\n') {
+        scanner->line++;
+        scanner->column = 1;
+    } else {
+        scanner->column++;
+    }
+
+    // Shift the characters, next->current and next->(read a new one)
+    scanner->current = scanner->next;
+    // At EOF dont call fgetc (it would just wait)
+    if (scanner->next != EOF) {
+        scanner->next = fgetc(scanner->input);
+    }
+}
+
+// Prints an error for the current character and returns ERR_LEXICAL
+static ErrorCode _lexical_error(Scanner *scanner) {
+    // Position of the wrong character
+    position pos;
+    pos.line = scanner->line;
+    pos.column = scanner->column;
+
+    // Printable characters use first if branch, others use the else branch
+    if (isprint(scanner->current)) {
+        error_print(ERR_LEXICAL, pos, "unexpected character '%c'", scanner->current);
+    } else {
+        error_print(ERR_LEXICAL, pos, "unexpected character with code %d", scanner->current);
+    }
+    return ERR_LEXICAL;
+}
+
+// Makes a token of the given type
+static ErrorCode _make_token(Token *token, TokenType type) {
+    token->type = type;
+    return ERR_OK;
+}
+
+// Makes an operator token
+static ErrorCode _operator_token(Token *token, OperatorType operator) {
+    token->type = TOKEN_OPERATOR;
+    token->operator = operator;
+    return ERR_OK;
+}
+
+// If the current character is the expected one eats it, and returns true
+static bool _match(Scanner *scanner, int expected) {
+    if (scanner->current != expected) {
+        return false;
+    }
+    _next_char(scanner);
+    return true;
+}
+
+// Prints error at the token and returns ERR_LEXICAL
+static ErrorCode _token_error(const Token *token, const char *message) {
+    position pos;
+    pos.line = token->line;
+    pos.column = token->column;
+
+    error_print(ERR_LEXICAL, pos, "%s", message);
+    return ERR_LEXICAL;
+}
+
+// Adds the current character to the buffer and moves to the next one
+static ErrorCode _add_char(Scanner *scanner) {
+    if (!dstring_append_char(&scanner->buffer, (char)scanner->current)) {
+        error_print_no_pos(ERR_INTERNAL, "out of memory");
+        return ERR_INTERNAL;
+    }
+    _next_char(scanner);
+    return ERR_OK;
+}
+
+// Returns true if the character is alphanumeric or '_'
+static bool _is_alphanum(int c) {
+    return isalnum(c) || c == '_';
+}
+
+// Reads alphanumeric or '_' characters into the buffer
+static ErrorCode _read_word(Scanner *scanner) {
+    dstring_clear(&scanner->buffer);
+    while (_is_alphanum(scanner->current)) {
+        ErrorCode result = _add_char(scanner);
+        if (result != ERR_OK) {
+            return result;
+        }
+    }
+    return ERR_OK;
+}
+
+// Reads after '@', only @main is a valid token
+static ErrorCode _read_main(Scanner *scanner, Token *token) {
+    // Collects the word after '@' into the buffer
+    ErrorCode result = _read_word(scanner);
+    if (result != ERR_OK) {
+        return result;
+    }
+
+    // The word in the buffer must equal "main", any other form throws an error
+    if (dstring_compare_str(&scanner->buffer, "main") != 0) {
+        return _token_error(token, "expected @main");
+    }
+    return _make_token(token, TOKEN_AT_MAIN);
+}
+
+// Copies the text from the buffer into the string of the token
+static ErrorCode _copy_buffer(Scanner *scanner, Token *token) {
+    // +1 for '\0'
+    token->string = malloc(scanner->buffer.length + 1);
+    if (token->string == NULL) {
+        error_print_no_pos(ERR_INTERNAL, "out of memory");
+        return ERR_INTERNAL;
+    }
+    strcpy(token->string, scanner->buffer.data);
+    return ERR_OK;
+}
+
+// Searches the word in the keyword table, returns tue if it finds it and sets the keyword
+static bool _find_keyword(const DynamicString *word, KeywordType *keyword) {
+    for (int i = 0; i < KW_COUNT; i++) {
+        if (dstring_compare_str(word, KEYWORD_NAMES[i]) == 0) {
+            *keyword = (KeywordType)i;
+            return true;
+        }
+    }
+    return false;
+}
+
+// Pushes a mode onto the istring stack
+static ErrorCode _push_istring_mode(Scanner *scanner, IStringMode mode) {
+    if (scanner->istring_depth == SCANNER_MAX_ISTRING_DEPTH) {
+        error_print_no_pos(ERR_INTERNAL, "interpolated strings are nested too deep");
+        return ERR_INTERNAL;
+    }
+
+    scanner->istring_modes[scanner->istring_depth] = mode;
+    scanner->istring_depth++;
+    return ERR_OK;
+}
+
+// Returns true if the scanner is inside the text of an istring
+static bool _in_istring_text(const Scanner *scanner) {
+    return scanner->istring_depth > 0 &&
+           scanner->istring_modes[scanner->istring_depth - 1] != ISTRING_MODE_EXPR;
+}
+
+// Starts an istring
+static ErrorCode _start_istring(Scanner *scanner, Token *token) {
+    // Skips the opening ", two more quotes mean a multiline istring (s"" is an empty string)
+    _next_char(scanner);
+    IStringMode mode = ISTRING_MODE_TEXT;
+    if (scanner->current == '"' && scanner->next == '"') {
+        _next_char(scanner);
+        _next_char(scanner);
+        mode = ISTRING_MODE_MULTILINE;
+    }
+
+    ErrorCode result = _push_istring_mode(scanner, mode);
+    if (result != ERR_OK) {
+        return result;
+    }
+    return _make_token(token, TOKEN_ISTRING_BEGIN);
+}
+
+// Reads the identifier or keyword, first character must be a letter or '_'
+static ErrorCode _read_identifier(Scanner *scanner, Token *token) {
+    // Collects the word into the buffer
+    ErrorCode result = _read_word(scanner);
+    if (result != ERR_OK) {
+        return result;
+    }
+
+    // 's"' starts an istring
+    if (dstring_compare_str(&scanner->buffer, "s") == 0 && scanner->current == '"') {
+        return _start_istring(scanner, token);
+    }
+
+    // The '_' is a special token
+    if (dstring_compare_str(&scanner->buffer, "_") == 0) {
+        return _make_token(token, TOKEN_UNDERSCORE);
+    }
+
+    /* Keywords have the same properties like identifiers (starts with a letter)
+    so we can search them with the same function.
+    */
+    KeywordType keyword;
+    if (_find_keyword(&scanner->buffer, &keyword)) {
+        token->type = TOKEN_KEYWORD;
+        token->keyword = keyword;
+        return ERR_OK;
+    }
+
+    // The token type is set and the name gets copied into the string of the token
+    token->type = TOKEN_IDENTIFIER;
+    return _copy_buffer(scanner, token);
+}
+
+// Reads the escape sequence and adds the decoded character to the buffer
+// only \\ \" \n \r \t are allowed
+static ErrorCode _read_escape(Scanner *scanner, Token *token) {
+    // Skips the first '\'
+    _next_char(scanner);
+
+    // The two characters of the escame sequence become one real character
+    char decoded;
+    switch (scanner->current) {
+    case '\\':
+        decoded = '\\';
+        break;
+    case '"':
+        decoded = '"';
+        break;
+    case 'n':
+        decoded = '\n';
+        break;
+    case 'r':
+        decoded = '\r';
+        break;
+    case 't':
+        decoded = '\t';
+        break;
+    default:
+        return _token_error(token, "invalid escape sequence in a string literal");
+    }
+    _next_char(scanner);
+
+    if (!dstring_append_char(&scanner->buffer, decoded)) {
+        error_print_no_pos(ERR_INTERNAL, "out of memory");
+        return ERR_INTERNAL;
+    }
+    return ERR_OK;
+}
+
+// Reads multiline string literal, everything is taken as is, there are no escape sequence
+static ErrorCode _read_multiline_string(Scanner *scanner, Token *token) {
+    dstring_clear(&scanner->buffer);
+
+    while (true) {
+        if (scanner->current == EOF) {
+            return _token_error(token, "unterminated multiline string literal");
+        }
+
+        // Quotes are counted, three or more of them in a row ends the string
+        if (scanner->current == '"') {
+            int quotes = 0;
+            while (scanner->current == '"') {
+                quotes++;
+                _next_char(scanner);
+            }
+
+            // The last 3 quotes close the string, the extra ones before are part of the text
+            // One or two quotes ar only text
+            int text_quotes = quotes;
+            if (quotes >= 3) {
+                text_quotes = quotes - 3;
+            }
+
+            for (int i = 0; i < text_quotes; i++) {
+                if (!dstring_append_char(&scanner->buffer, '"')) {
+                    error_print_no_pos(ERR_INTERNAL, "out of memory");
+                    return ERR_INTERNAL;
+                }
+            }
+
+            if (quotes >= 3) {
+                break;
+            }
+            continue;
+        }
+
+        // Any other character is added as is
+        ErrorCode result = _add_char(scanner);
+        if (result != ERR_OK) {
+            return result;
+        }
+    }
+
+    token->type = TOKEN_STRING_LITERAL;
+    return _copy_buffer(scanner, token);
+}
+
+// Reads string literal
+static ErrorCode _read_string(Scanner *scanner, Token *token) {
+    // Skips the first '"', text of the string is collected into the buffer
+    _next_char(scanner);
+
+    // Two or more quotes -> change to a multinine string
+    if (scanner->current == '"' && scanner->next == '"') {
+        _next_char(scanner);
+        _next_char(scanner);
+        return _read_multiline_string(scanner, token);
+    }
+
+    dstring_clear(&scanner->buffer);
+
+    while (scanner->current != '"') {
+        // A string literal must end in the same line as it started
+        if (scanner->current == '\n' || scanner->current == EOF) {
+            return _token_error(token, "unterminated string literal");
+        }
+
+        // An escape sequence is decoded, any other character added as it is
+        ErrorCode result;
+        if (scanner->current == '\\') {
+            result = _read_escape(scanner, token);
+        } else {
+            result = _add_char(scanner);
+        }
+
+        if (result != ERR_OK) {
+            return result;
+        }
+    }
+
+    // Skips the last '"', the token gets the copy of the string
+    _next_char(scanner);
+    token->type = TOKEN_STRING_LITERAL;
+    return _copy_buffer(scanner, token);
+}
+
+// Reads the next part of the istring
+static ErrorCode _read_istring_text(Scanner *scanner, Token *token) {
+    bool multiline = scanner->istring_modes[scanner->istring_depth - 1] == ISTRING_MODE_MULTILINE;
+
+    // The closing " ends the istring
+    if (scanner->current == '"' && !multiline) {
+        _next_char(scanner);
+        scanner->istring_depth--;
+        return _make_token(token, TOKEN_ISTRING_END);
+    }
+
+    // '${' starts an expression, its tokens are read as normal until '}'
+    if (scanner->current == '$' && scanner->next == '{') {
+        _next_char(scanner);
+        _next_char(scanner);
+        ErrorCode result = _push_istring_mode(scanner, ISTRING_MODE_EXPR);
+        if (result != ERR_OK) {
+            return result;
+        }
+        return _make_token(token, TOKEN_ISTRING_EXPR_BEGIN);
+    }
+
+    // $name is the value of the variable
+    if (scanner->current == '$' && (isalpha(scanner->next) || scanner->next == '_')) {
+        _next_char(scanner);
+        ErrorCode result = _read_word(scanner);
+        if (result != ERR_OK) {
+            return result;
+        }
+
+        KeywordType keyword;
+        if (dstring_compare_str(&scanner->buffer, "_") == 0 ||
+            _find_keyword(&scanner->buffer, &keyword)) {
+            return _token_error(token, "$ must be followed by a variable name");
+        }
+        token->type = TOKEN_ISTRING_ID;
+        return _copy_buffer(scanner, token);
+    }
+
+    // A standalone $ must be followed by a variable name or '{'
+    if (scanner->current == '$' && scanner->next != '$') {
+        return _token_error(token, "invalid use of '$' in interpolated string");
+    }
+
+    // The text until the next $ or closing " is ISTRING_PART
+    dstring_clear(&scanner->buffer);
+    while (true) {
+        if (scanner->current == EOF) {
+            return _token_error(token, "unterminated interpolated string literal");
+        }
+
+        // In a multiline istring quotes are counted like a normal multiline string
+        if (scanner->current == '"' && multiline) {
+            int quotes = 0;
+            while (scanner->current == '"') {
+                quotes++;
+                _next_char(scanner);
+            }
+
+            // The last 3 quotes close the string, the extra ones before are text
+            int text_quotes = quotes;
+            if (quotes >= 3) {
+                text_quotes = quotes - 3;
+            }
+            for (int i = 0; i < text_quotes; i++) {
+                if (!dstring_append_char(&scanner->buffer, '"')) {
+                    error_print_no_pos(ERR_INTERNAL, "out of memory");
+                    return ERR_INTERNAL;
+                }
+            }
+
+            // ISTRING_END comes on next call after the last ISTRING_PART
+            if (quotes >= 3) {
+                scanner->istring_depth--;
+                scanner->istring_end_pending = true;
+                break;
+            }
+            continue;
+        }
+
+        // A single-line string ends with " and ends on same line
+        if (scanner->current == '"' && !multiline) {
+            break;
+        }
+        if (scanner->current == '\n' && !multiline) {
+            return _token_error(token, "unterminated interpolated string literal");
+        }
+
+        // "$$" is one '$', any other $ starts a value
+        if (scanner->current == '$') {
+            if (scanner->next != '$') {
+                break;
+            }
+            _next_char(scanner);
+        }
+
+        //  Escape sequences are decoded like in a normal string
+        ErrorCode result;
+        if (scanner->current == '\\' && !multiline) {
+            result = _read_escape(scanner, token);
+        } else {
+            result = _add_char(scanner);
+        }
+
+        if (result != ERR_OK) {
+            return result;
+        }
+    }
+
+    // The closing quotes came right away, so no text before ISTRING_END
+    if (scanner->buffer.length == 0) {
+        scanner->istring_end_pending = false;
+        return _make_token(token, TOKEN_ISTRING_END);
+    }
+
+    token->type = TOKEN_ISTRING_PART;
+    return _copy_buffer(scanner, token);
+}
+
+// Reads digit into buffer, '_' between digits is skipped
+static ErrorCode _read_digits(Scanner *scanner, Token *token) {
+    while (isdigit(scanner->current) || scanner->current == '_') {
+        if (scanner->current == '_') {
+            // There can be multiple '_' between two digits
+            while (scanner->current == '_') {
+                _next_char(scanner);
+            }
+            if (!isdigit(scanner->current)) {
+                return _token_error(token, "'_' in a number must be followed by a digit");
+            }
+        }
+
+        ErrorCode result = _add_char(scanner);
+        if (result != ERR_OK) {
+            return result;
+        }
+    }
+    return ERR_OK;
+}
+
+// Reads an integer or double, the first char is a digit or a '.'
+static ErrorCode _read_number(Scanner *scanner, Token *token) {
+    // This rejects any number that starts with a 0 (01 or 0_1) except the 0 itself
+    if (scanner->current == '0' && (isdigit(scanner->next) || scanner->next == '_')) {
+        return _token_error(token, "an integer literal must not have a leading 0");
+    }
+
+    // Collects the digits into the cleared buffer
+    dstring_clear(&scanner->buffer);
+    ErrorCode result = _read_digits(scanner, token);
+    if (result != ERR_OK) {
+        return result;
+    }
+
+    bool is_double = false;
+    if (scanner->current == '.' && isdigit(scanner->next)) {
+        is_double = true;
+        result = _add_char(scanner);
+        if (result != ERR_OK) {
+            return result;
+        }
+
+        result = _read_digits(scanner, token);
+        if (result != ERR_OK) {
+            return result;
+        }
+    }
+
+    // The exponent (e or E with optional + and - and at least one digit)
+    if (scanner->current == 'e' || scanner->current == 'E') {
+        is_double = true;
+        result = _add_char(scanner);
+        if (result != ERR_OK) {
+            return result;
+        }
+
+        if (scanner->current == '+' || scanner->current == '-') {
+            result = _add_char(scanner);
+            if (result != ERR_OK) {
+                return result;
+            }
+        }
+
+        // Only one character can be looked ahead (1e, 1e+ are errors)
+        if (!isdigit(scanner->current)) {
+            return _token_error(token, "exponent of a number must have at least one digit");
+        }
+        result = _read_digits(scanner, token);
+        if (result != ERR_OK) {
+            return result;
+        }
+    }
+
+    // The d or D suffix makes a double
+    if (scanner->current == 'd' || scanner->current == 'D') {
+        is_double = true;
+        _next_char(scanner);
+    }
+
+    // The text of the number is converted into its value
+    if (is_double) {
+        token->type = TOKEN_DOUBLE_LITERAL;
+        token->double_value = strtod(scanner->buffer.data, NULL);
+    } else {
+        token->type = TOKEN_INT_LITERAL;
+        token->int_value = strtoll(scanner->buffer.data, NULL, 10);
+    }
+    return ERR_OK;
+}
+
+// Pushes new indentation level in the stack
+static ErrorCode _push_indent(Scanner *scanner, int indent) {
+    // If the stack is full it gets bigger
+    if (scanner->indent_count == scanner->indent_capacity) {
+        int new_capacity = scanner->indent_capacity * 2;
+        int *new_stack = realloc(scanner->indent_stack, new_capacity * sizeof(int));
+        if (new_stack == NULL) {
+            error_print_no_pos(ERR_INTERNAL, "out of memory");
+            return ERR_INTERNAL;
+        }
+        scanner->indent_stack = new_stack;
+        scanner->indent_capacity = new_capacity;
+    }
+
+    scanner->indent_stack[scanner->indent_count] = indent;
+    scanner->indent_count++;
+    return ERR_OK;
+}
+
+// Compare the indent in the new line with the top of the indent stack
+// made_token is true if an INDENT or DEDENT token was created
+static ErrorCode _check_indent(Scanner *scanner, Token *token, bool *made_token) {
+    *made_token = false;
+
+    // The indent is the number of spaces before the first token in the line
+    // (measured in the whitespace loop)
+    int indent = scanner->line_indent;
+    int top = scanner->indent_stack[scanner->indent_count - 1];
+
+    // A bigger indent opens a new block
+    if (indent > top) {
+        ErrorCode result = _push_indent(scanner, indent);
+        if (result != ERR_OK) {
+            return result;
+        }
+        *made_token = true;
+        return _make_token(token, TOKEN_INDENT);
+    }
+
+    // A smaller indent closes block, there is one DEDENT for every closed level
+    while (indent < scanner->indent_stack[scanner->indent_count - 1]) {
+        scanner->indent_count--;
+        scanner->pending_dedents++;
+    }
+
+    // The indent must be the same as on the outer levels
+    if (indent != scanner->indent_stack[scanner->indent_count - 1]) {
+        return _token_error(token, "indentation does not match any outer level");
+    }
+
+    // The first DEDENT is returned now, others with the next calls
+    if (scanner->pending_dedents > 0) {
+        scanner->pending_dedents--;
+        *made_token = true;
+        return _make_token(token, TOKEN_DEDENT);
+    }
+    return ERR_OK;
+}
+
+// Skips block comments, nested comments are allowed
+// had_newline is true, if there was a line break inside the comment
+static ErrorCode _skip_block_comment(Scanner *scanner, Token *token, bool *had_newline) {
+    // An error is reported at the start of the comment
+    token->line = scanner->line;
+    token->column = scanner->column;
+    *had_newline = false;
+
+    // Skips the opening tag (/*)
+    _next_char(scanner);
+    _next_char(scanner);
+    int depth = 1;
+
+    // The depth counts open comments, it ends when it goes back to 0
+    while (depth > 0) {
+        if (scanner->current == EOF) {
+            return _token_error(token, "unterminated block comment");
+        }
+
+        if (scanner->current == '/' && scanner->next == '*') {
+            depth++;
+            _next_char(scanner);
+        } else if (scanner->current == '*' && scanner->next == '/') {
+            depth--;
+            _next_char(scanner);
+        } else if (scanner->current == '\n') {
+            *had_newline = true;
+        }
+        _next_char(scanner);
+    }
+    return ERR_OK;
+}
+
+ErrorCode scanner_init(Scanner *scanner, FILE *input) {
+    // Check function inputs
+    if (scanner == NULL || input == NULL) {
+        return ERR_INTERNAL;
+    }
+
+    // Feed the scanner the input and initialise the variables
+    scanner->input = input;
+    scanner->line = 1;
+    scanner->column = 1;
+    scanner->line_has_token = false;
+    scanner->parenth_depth = 0;
+    scanner->newline_seen = false;
+    scanner->indent_checked = false;
+    scanner->pending_dedents = 0;
+    scanner->at_line_start = true;
+    scanner->tab_in_indent = false;
+    scanner->line_indent = -1;
+    scanner->after_comment = false;
+    scanner->istring_depth = 0;
+    scanner->istring_end_pending = false;
+
+    // Initialise lexem buffer, internal error if it fails
+    if (!dstring_init(&scanner->buffer)) {
+        return ERR_INTERNAL;
+    }
+
+    // Initialise indent stack, starts with level 0
+    scanner->indent_capacity = 8;
+    scanner->indent_stack = malloc(scanner->indent_capacity * sizeof(int));
+    if (scanner->indent_stack == NULL) {
+        dstring_free(&scanner->buffer);
+        return ERR_INTERNAL;
+    }
+    scanner->indent_stack[0] = 0;
+    scanner->indent_count = 1;
+
+    // Reading the first 2 characters
+    scanner->current = fgetc(input);
+    scanner->next = EOF;
+    if (scanner->current != EOF) {
+        scanner->next = fgetc(input);
+    }
+
+    return ERR_OK;
+}
+
+void scanner_destroy(Scanner *scanner) {
+    if (scanner == NULL) {
+        return;
+    }
+
+    dstring_free(&scanner->buffer);
+    scanner->input = NULL;
+
+    free(scanner->indent_stack);
+    scanner->indent_stack = NULL;
+}
+
+// Reads one token from current character, whitespace is already skipped
+static ErrorCode _read_token(Scanner *scanner, Token *token) {
+    // For identifiers, they start with a letter or '_'
+    if (isalpha(scanner->current) || scanner->current == '_') {
+        return _read_identifier(scanner, token);
+    }
+
+    // For numbers that satrt with a digit
+    if (isdigit(scanner->current)) {
+        return _read_number(scanner, token);
+    }
+
+    switch (scanner->current) {
+    case '(':
+        _next_char(scanner);
+        return _make_token(token, TOKEN_LEFT_PAREN);
+    case ')':
+        _next_char(scanner);
+        return _make_token(token, TOKEN_RIGHT_PAREN);
+    // Punctuation
+    case ':':
+        _next_char(scanner);
+        return _make_token(token, TOKEN_COLON);
+    case ';':
+        _next_char(scanner);
+        return _make_token(token, TOKEN_SEMICOLON);
+    case ',':
+        _next_char(scanner);
+        return _make_token(token, TOKEN_COMMA);
+    // A '.' before a deigit is a double, otherwise its a DOT token
+    case '.':
+        if (isdigit(scanner->next)) {
+            return _read_number(scanner, token);
+        }
+        _next_char(scanner);
+        return _make_token(token, TOKEN_DOT);
+
+    // Operators
+    case '+':
+        _next_char(scanner);
+        return _operator_token(token, OP_PLUS);
+    case '-':
+        _next_char(scanner);
+        return _operator_token(token, OP_MINUS);
+    case '*':
+        _next_char(scanner);
+        return _operator_token(token, OP_MUL);
+    case '/':
+        _next_char(scanner);
+        return _operator_token(token, OP_DIV);
+
+    // Variable length operators
+    case '<':
+        _next_char(scanner);
+        if (_match(scanner, '=')) {
+            return _operator_token(token, OP_LESS_EQUAL);
+        }
+        if (_match(scanner, '-')) {
+            return _operator_token(token, OP_LEFT_ARR);
+        }
+        return _operator_token(token, OP_LESS);
+    case '>':
+        _next_char(scanner);
+        if (_match(scanner, '=')) {
+            return _operator_token(token, OP_GREATER_EQUAL);
+        }
+        return _operator_token(token, OP_GREATER);
+    case '=':
+        _next_char(scanner);
+        if (_match(scanner, '=')) {
+            return _operator_token(token, OP_EQUAL);
+        }
+        if (_match(scanner, '>')) {
+            return _operator_token(token, OP_BIG_ARR);
+        }
+        return _operator_token(token, OP_ASSIGN);
+    case '!':
+        _next_char(scanner);
+        if (_match(scanner, '=')) {
+            return _operator_token(token, OP_NOT_EQUAL);
+        }
+        return _operator_token(token, OP_NOT);
+
+    // Logical operators
+    case '&':
+        _next_char(scanner);
+        if (_match(scanner, '&')) {
+            return _operator_token(token, OP_AND);
+        }
+        return _token_error(token, "expected '&&', a single '&' is not allowed");
+    case '|':
+        _next_char(scanner);
+        if (_match(scanner, '|')) {
+            return _operator_token(token, OP_OR);
+        }
+        return _token_error(token, "expected '||', a single '|' is not allowed");
+
+    // The @main annotation
+    case '@':
+        _next_char(scanner);
+        return _read_main(scanner, token);
+
+    // String literals
+    case '"':
+        return _read_string(scanner, token);
+
+    // '}' ends the expression of istring
+    case '}':
+        if (scanner->istring_depth > 0 &&
+            scanner->istring_modes[scanner->istring_depth - 1] == ISTRING_MODE_EXPR) {
+            _next_char(scanner);
+            scanner->istring_depth--;
+            return _make_token(token, TOKEN_ISTRING_EXPR_END);
+        }
+        return _lexical_error(scanner);
+
+    default:
+        // No other token can start with any other character
+        return _lexical_error(scanner);
+    }
+}
+
+ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
+    // Initialise with empty token
+    Token empty = {0};
+    *token = empty;
+
+    // DEDENT tokens that are waiting from the last indent check
+    if (scanner->pending_dedents > 0) {
+        scanner->pending_dedents--;
+        token->line = scanner->line;
+        token->column = scanner->column;
+        return _make_token(token, TOKEN_DEDENT);
+    }
+
+    // Closing """ was already read in the last ISTRING_PART
+    if (scanner->istring_end_pending) {
+        scanner->istring_end_pending = false;
+        token->line = scanner->line;
+        token->column = scanner->column;
+        return _make_token(token, TOKEN_ISTRING_END);
+    }
+
+    // Inside the istring everything is read as is
+    if (_in_istring_text(scanner)) {
+        token->line = scanner->line;
+        token->column = scanner->column;
+        return _read_istring_text(scanner, token);
+    }
+
+    // Skips whitespaces and empty lines, line break after a token ends the line with EOL
+    while (true) {
+        // Spaces, tabs and \r is skipped
+        while (_is_whitespace(scanner->current)) {
+            // Tab is not allowed before the first token in the line
+            if (scanner->current == '\t' && scanner->at_line_start) {
+                scanner->tab_in_indent = true;
+            }
+            _next_char(scanner);
+        }
+
+        // The indentation is measured from the first non-whitespace character
+        if (scanner->line_indent < 0) {
+            scanner->line_indent = scanner->column - 1;
+        }
+
+        // A line comment is skipped until \n or EOF, line break is handled below
+        if (scanner->current == '/' && scanner->next == '/') {
+            while (scanner->current != '\n' && scanner->current != EOF) {
+                _next_char(scanner);
+            }
+            continue;
+        }
+
+        //
+        if (scanner->current == '/' && scanner->next == '*') {
+            bool had_newline;
+            ErrorCode result = _skip_block_comment(scanner, token, &had_newline);
+            if (result != ERR_OK) {
+                return result;
+            }
+
+            // An expression inside an istring must be in one line
+            if (had_newline && scanner->istring_depth > 0) {
+                return _token_error(token, "line break inside interpolated string expression");
+            }
+
+            // A comment with a line break inside acts as EOL
+            if (had_newline) {
+                scanner->after_comment = true;
+                scanner->newline_seen = true;
+                if (scanner->line_has_token && scanner->parenth_depth == 0) {
+                    scanner->line_has_token = false;
+                    scanner->indent_checked = false;
+                    return _make_token(token, TOKEN_EOL);
+                }
+            }
+            continue;
+        }
+
+        if (scanner->current != '\n') {
+            break;
+        }
+
+        // An expression inside istring must fit in one line
+        if (scanner->istring_depth > 0) {
+            token->line = scanner->line;
+            token->column = scanner->column;
+            return _token_error(token, "line break inside interpolated string expression");
+        }
+
+        // If the line had a token, put and EOL token at the line break
+        // Inside parentheses line break is only whitespace
+        if (scanner->line_has_token && scanner->parenth_depth == 0) {
+            token->line = scanner->line;
+            token->column = scanner->column;
+            _next_char(scanner);
+            scanner->line_has_token = false;
+            scanner->newline_seen = true;
+            scanner->indent_checked = false;
+            scanner->at_line_start = true;
+            scanner->tab_in_indent = false;
+            scanner->line_indent = -1;
+            scanner->after_comment = false;
+            return _make_token(token, TOKEN_EOL);
+        }
+
+        // Empty lines and line breaks inside parentheses produce nothing
+        _next_char(scanner);
+        scanner->newline_seen = true;
+        scanner->at_line_start = true;
+        scanner->tab_in_indent = false;
+        scanner->line_indent = -1;
+        scanner->after_comment = false;
+    }
+
+    // The token starts at the current character
+    token->line = scanner->line;
+    token->column = scanner->column;
+
+    // End of the input, every next call returns TOKEN_EOF
+    if (scanner->current == EOF) {
+
+        if (scanner->istring_depth > 0) {
+            return _token_error(token, "unterminated interpolated string literal");
+        }
+        // If the last line has no line break at the end, but it still needs EOL before EOF
+        if (scanner->line_has_token) {
+            scanner->line_has_token = false;
+            return _make_token(token, TOKEN_EOL);
+        }
+
+        // Every block that is still open needs to be closed with DEDENT
+        if (scanner->indent_count > 1) {
+            scanner->indent_count--;
+            return _make_token(token, TOKEN_DEDENT);
+        }
+
+        token->type = TOKEN_EOF;
+        return ERR_OK;
+    }
+
+    // After a comment with line break, the rest of the line cannot have a token
+    if (scanner->after_comment) {
+        return _token_error(token, "token after a multi-line comment on the same line");
+    }
+
+    // Tab is the first token in line and line is not empty
+    if (scanner->tab_in_indent) {
+        return _token_error(token, "tab is not allowed in indentation");
+    }
+
+    if (scanner->parenth_depth > 0 && scanner->at_line_start && scanner->current != ')') {
+        int top = scanner->indent_stack[scanner->indent_count - 1];
+        if (scanner->line_indent <= top) {
+            return _token_error(token, "continuation line must be indented more");
+        }
+    }
+
+    // At the start of a line indentation is checked
+    if (!scanner->line_has_token && !scanner->indent_checked) {
+        scanner->indent_checked = true;
+        bool made_token;
+        ErrorCode result = _check_indent(scanner, token, &made_token);
+        if (result != ERR_OK || made_token) {
+            return result;
+        }
+    }
+
+    ErrorCode result = _read_token(scanner, token);
+    if (result != ERR_OK) {
+        return result;
+    }
+
+    // The line has a token now, so the next line break gives EOL
+    scanner->line_has_token = true;
+
+    // The parser needs to know if the token is the first one in its line
+    token->newline_before = scanner->newline_seen;
+    scanner->newline_seen = false;
+    scanner->at_line_start = false;
+
+    // Counts the open parentheses, a wrong ')' is reported by the parser
+    if (token->type == TOKEN_LEFT_PAREN) {
+        scanner->parenth_depth++;
+    } else if (token->type == TOKEN_RIGHT_PAREN && scanner->parenth_depth > 0) {
+        scanner->parenth_depth--;
+    }
+
+    return ERR_OK;
+}
