@@ -1603,3 +1603,97 @@ static void gen_block(Gen *g, const AstBLOCK *b, bool want_value, int target) {
     }
     scope_pop(g);
 }
+
+/* ------------------------------------------------------------ functions */
+
+/**
+ * Compile a function, lambda or extension method into g->funcs
+ * (PUSHFRAME, DEFVARs, POPS of parameters, body, POPFRAME, RETURN).
+ * @param g         generator
+ * @param label     function label
+ * @param shown     name shown in the comment
+ * @param params    flattened parameters
+ * @param np        number of parameters
+ * @param recv      extension receiver, or NULL
+ * @param body      function body
+ * @param ret_kind  declared result kind, or K_NONE
+ */
+static void gen_callable(Gen *g, const char *label, const char *shown, const AstParameter *params, size_t np,
+                         const AstParameter *recv, const AstBLOCK *body, int ret_kind) {
+    Ctx ctx = {0};
+    Ctx *saved = g->ctx;
+    g->ctx = &ctx;
+    ctx.ret_kind = ret_kind;
+    char *end = xfmt("%s$end", label);
+    ctx.end_label = end;
+
+    scope_push(g);
+    size_t total = np + (recv ? 1 : 0);
+    const char **pm = xrealloc(NULL, (total + 1) * sizeof *pm);
+    size_t k = 0;
+    if (recv) {
+        pm[k++] = scope_declare(g, recv->name, recv->type);
+    }
+    for (size_t i = 0; i < np; i++) {
+        pm[k++] = scope_declare(g, params[i].name, params[i].type);
+    }
+    gen_block(g, body, true, ret_kind);
+    scope_pop(g);
+
+    Buf *o = &g->funcs;
+    buf_printf(o, "# %s %s\nLABEL %s\nPUSHFRAME\n", shown, label, label);
+    for (size_t i = 0; i < ctx.nlocals; i++) {
+        buf_printf(o, "DEFVAR LF@%s\n", ctx.locals[i]);
+    }
+    for (size_t i = total; i > 0; i--) { /* arguments lie from left to right */
+        buf_printf(o, "POPS LF@%s\n", pm[i - 1]);
+    }
+    buf_puts(o, ctx.body.data ? ctx.body.data : "");
+    buf_printf(o, "LABEL %s\nPOPFRAME\nRETURN\n", end);
+
+    for (size_t i = 0; i < ctx.nlocals; i++) {
+        free(ctx.locals[i]);
+    }
+    free(ctx.locals);
+    free(ctx.scopes);
+    free(ctx.body.data);
+    free(pm);
+    free(end);
+    g->ctx = saved;
+}
+
+/**
+ * Join all parameter lists into one array.
+ * @param pls    parameter lists
+ * @param count  output: number of parameters
+ * @return       heap array, the caller frees it
+ */
+static AstParameter *flatten_params(const AstParameterLists *pls, size_t *count) {
+    size_t n = 0;
+    for (size_t k = 0; k < pls->count; k++) {
+        n += pls->items[k].count;
+    }
+    AstParameter *a = xrealloc(NULL, (n + 1) * sizeof *a);
+    size_t j = 0;
+    for (size_t k = 0; k < pls->count; k++) {
+        for (size_t i = 0; i < pls->items[k].count; i++) {
+            a[j++] = pls->items[k].items[i];
+        }
+    }
+    *count = n;
+    return a;
+}
+
+/**
+ * Generate a user function or extension method.
+ * @param g      generator
+ * @param f      function
+ * @param label  label to use
+ * @param recv   extension receiver, or NULL
+ */
+static void gen_function(Gen *g, const AstFunction *f, const char *label, const AstParameter *recv) {
+    size_t n;
+    AstParameter *ps = flatten_params(&f->parameters, &n);
+    gen_callable(g, label, f->name, ps, n, recv, f->inside, kind_of(f->return_type));
+    free(ps);
+}
