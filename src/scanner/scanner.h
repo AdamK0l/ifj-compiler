@@ -30,6 +30,7 @@ typedef struct {
     int pending_dedents;  // Number of DEDENT tokens that have to be returned
     bool at_line_start;   // True, if no token was read on the current line
     bool tab_in_indent;   // True, if there was a tab before the first token on the line
+    int line_indent;      // Spaces at the start of the line, default -1
 } Scanner;
 
 // Initialises the scanner to read from input, returns ERR_OK or ERR_INTERNAL

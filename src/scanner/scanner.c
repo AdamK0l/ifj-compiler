@@ -266,7 +266,8 @@ static ErrorCode _check_indent(Scanner *scanner, Token *token, bool *made_token)
     *made_token = false;
 
     // The indent is the number of spaces before the first token in the line
-    int indent = scanner->column - 1;
+    // (measured in the whitespace loop)
+    int indent = scanner->line_indent;
     int top = scanner->indent_stack[scanner->indent_count - 1];
 
     // A bigger indent opens a new block
@@ -316,6 +317,7 @@ ErrorCode scanner_init(Scanner *scanner, FILE *input) {
     scanner->pending_dedents = 0;
     scanner->at_line_start = true;
     scanner->tab_in_indent = false;
+    scanner->line_indent = -1;
 
     // Initialise lexem buffer, internal error if it fails
     if (!dstring_init(&scanner->buffer)) {
@@ -484,6 +486,11 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
             _next_char(scanner);
         }
 
+        // The indentation is measured from the first non-whitespace character
+        if (scanner->line_indent < 0) {
+            scanner->line_indent = scanner->column - 1;
+        }
+
         // A line comment is skipped until \n or EOF, line break is handled below
         if (scanner->current == '/' && scanner->next == '/') {
             while (scanner->current != '\n' && scanner->current != EOF) {
@@ -507,6 +514,7 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
             scanner->indent_checked = false;
             scanner->at_line_start = true;
             scanner->tab_in_indent = false;
+            scanner->line_indent = -1;
             return _make_token(token, TOKEN_EOL);
         }
 
@@ -515,6 +523,7 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
         scanner->newline_seen = true;
         scanner->at_line_start = true;
         scanner->tab_in_indent = false;
+        scanner->line_indent = -1;
     }
 
     // The token starts at the current character
@@ -546,7 +555,7 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
 
     if (scanner->parenth_depth > 0 && scanner->at_line_start && scanner->current != ')') {
         int top = scanner->indent_stack[scanner->indent_count - 1];
-        if (scanner->column - 1 <= top) {
+        if (scanner->line_indent <= top) {
             return _token_error(token, "continuation line must be indented more");
         }
     }
