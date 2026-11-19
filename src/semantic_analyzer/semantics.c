@@ -8,6 +8,7 @@
 #include "semantics.h"
 #include "errors.h"
 #include "memory.h"
+#include "type_checker.h"
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
@@ -196,6 +197,302 @@ int semantic_pass1(AstProgram *program, Symtable *table) {
     return ERR_OK;
 }
 
+/* ==================== Pass 2 Implementation ==================== */
+
+static int _check_statement(AstStatement *stmt, Symtable *table, AstType *enclosing_return_type, AstType **out_type);
+
+static int _check_block(AstBLOCK *block, Symtable *table, AstType *enclosing_return_type, AstType **out_block_type) {
+    if (!block) {
+        if (out_block_type) {
+            *out_block_type = type_get_unit();
+        }
+        return ERR_OK;
+    }
+
+    AstType *last_type = type_get_unit();
+
+    for (size_t i = 0; i < block->statements.count; i++) {
+        AstStatement *stmt = block->statements.items[i];
+        if (!stmt) continue;
+
+        AstType *stmt_type = NULL;
+        int res = _check_statement(stmt, table, enclosing_return_type, &stmt_type);
+        if (res != ERR_OK) {
+            return res;
+        }
+
+        if (stmt_type != NULL) {
+            last_type = stmt_type;
+        } else {
+            last_type = type_get_unit();
+        }
+    }
+
+    if (out_block_type) {
+        *out_block_type = last_type;
+    }
+    return ERR_OK;
+}
+
+static int _check_statement(AstStatement *stmt, Symtable *table, AstType *enclosing_return_type, AstType **out_type) {
+    if (!stmt || !table) {
+        return ERR_INTERNAL;
+    }
+
+    switch (stmt->kind) {
+        case AST_STATEMENT_VARIABLE: {
+            AstType *init_type = NULL;
+            int res = check_expression(stmt->data.variable.initializer, table, &init_type);
+            if (res != ERR_OK) {
+                return res;
+            }
+
+            AstType *var_type = stmt->data.variable.declared_type;
+            if (var_type != NULL) {
+                if (!type_is_compatible(var_type, init_type)) {
+                    error_print(ERR_SEM_TYPE, stmt->pos,
+                                "Type mismatch in variable '%s' definition: declared '%s', but initialized with '%s'",
+                                stmt->data.variable.name,
+                                ast_type_to_string(var_type->kind),
+                                ast_type_to_string(init_type->kind));
+                    return ERR_SEM_TYPE;
+                }
+            } else {
+                var_type = init_type;
+                stmt->data.variable.declared_type = ast_type_clone(init_type);
+            }
+
+            // Check redefinition in the current scope
+            if (symtable_lookup_current_scope(table, stmt->data.variable.name) != NULL) {
+                error_print(ERR_SEM_REDEFINITION, stmt->pos,
+                            "Redefinition of variable '%s' in the same scope",
+                            stmt->data.variable.name);
+                return ERR_SEM_REDEFINITION;
+            }
+
+            if (!symtable_insert_variable(table, stmt->data.variable.name, var_type, stmt->data.variable.is_changeable)) {
+                return ERR_INTERNAL;
+            }
+
+            if (out_type) *out_type = type_get_unit();
+            return ERR_OK;
+        }
+
+        case AST_STATEMENT_ASSIGN: {
+            BstNode *var_node = symtable_lookup(table, stmt->data.assignment.name);
+            if (!var_node || var_node->data.kind != SYMBOL_VARIABLE) {
+                error_print(ERR_SEM_UNDEFINED, stmt->pos,
+                            "Assignment to undefined variable '%s'",
+                            stmt->data.assignment.name);
+                return ERR_SEM_UNDEFINED;
+            }
+
+            // Check mutability: cannot assign to val or function parameter
+            if (!var_node->data.is_changeable) {
+                error_print(ERR_SEM_MUTABILITY, stmt->pos,
+                            "Cannot assign to immutable variable or parameter '%s'",
+                            stmt->data.assignment.name);
+                return ERR_SEM_MUTABILITY;
+            }
+
+            AstType *val_type = NULL;
+            int res = check_expression(stmt->data.assignment.value, table, &val_type);
+            if (res != ERR_OK) {
+                return res;
+            }
+
+            if (!type_is_compatible(var_node->data.type, val_type)) {
+                error_print(ERR_SEM_TYPE, stmt->pos,
+                            "Type mismatch in assignment to '%s': variable is '%s', assigned value is '%s'",
+                            stmt->data.assignment.name,
+                            ast_type_to_string(var_node->data.type->kind),
+                            ast_type_to_string(val_type->kind));
+                return ERR_SEM_TYPE;
+            }
+
+            if (out_type) *out_type = type_get_unit();
+            return ERR_OK;
+        }
+
+        case AST_STATEMENT_EXPRESSION: {
+            return check_expression(stmt->data.expression, table, out_type);
+        }
+
+        case AST_STATEMENT_WHILE: {
+            AstType *cond_type = NULL;
+            int res = check_expression(stmt->data.while_loop.condition, table, &cond_type);
+            if (res != ERR_OK) {
+                return res;
+            }
+
+            if (cond_type->kind != AST_TYPE_BOOLEAN) {
+                error_print(ERR_SEM_TYPE, stmt->pos,
+                            "Condition in while loop must be Boolean, but got '%s'",
+                            ast_type_to_string(cond_type->kind));
+                return ERR_SEM_TYPE;
+            }
+
+            symtable_push_scope(table);
+            res = _check_block(stmt->data.while_loop.inside, table, enclosing_return_type, NULL);
+            symtable_pop_scope(table);
+            if (res != ERR_OK) {
+                return res;
+            }
+
+            if (out_type) *out_type = type_get_unit();
+            return ERR_OK;
+        }
+
+        case AST_STATEMENT_RETURN: {
+            if (!enclosing_return_type) {
+                error_print(ERR_SEM_OTHER, stmt->pos, "Return statement outside function body");
+                return ERR_SEM_OTHER;
+            }
+
+            AstType *ret_type = NULL;
+            if (stmt->data.return_value != NULL) {
+                int res = check_expression(stmt->data.return_value, table, &ret_type);
+                if (res != ERR_OK) {
+                    return res;
+                }
+            } else {
+                ret_type = type_get_unit();
+            }
+
+            // Spec section 2.3 rule 4: In a function with explicit Unit return type,
+            // the returned value is evaluated and discarded.
+            if (enclosing_return_type->kind != AST_TYPE_UNIT &&
+                !type_is_compatible(enclosing_return_type, ret_type)) {
+                error_print(ERR_SEM_TYPE, stmt->pos,
+                            "Return value type mismatch: function expects '%s', but returned '%s'",
+                            ast_type_to_string(enclosing_return_type->kind),
+                            ast_type_to_string(ret_type->kind));
+                return ERR_SEM_TYPE;
+            }
+
+            if (out_type) *out_type = ret_type;
+            return ERR_OK;
+        }
+
+        case AST_STATEMENT_FOR: {
+            // Check zero step constraint (Error 10)
+            if (stmt->data.for_loop.step != NULL &&
+                stmt->data.for_loop.step->kind == AST_EXPR_INT &&
+                stmt->data.for_loop.step->data.int_value == 0) {
+                error_print(ERR_SEM_OTHER, stmt->pos, "For loop step cannot be 0");
+                return ERR_SEM_OTHER;
+            }
+
+            AstType *from_type = NULL;
+            int res = check_expression(stmt->data.for_loop.from, table, &from_type);
+            if (res != ERR_OK) return res;
+
+            AstType *to_type = NULL;
+            res = check_expression(stmt->data.for_loop.to, table, &to_type);
+            if (res != ERR_OK) return res;
+
+            if (stmt->data.for_loop.step != NULL) {
+                AstType *step_type = NULL;
+                res = check_expression(stmt->data.for_loop.step, table, &step_type);
+                if (res != ERR_OK) return res;
+            }
+
+            // Enter loop scope with induction variable
+            symtable_push_scope(table);
+            symtable_insert_variable(table, stmt->data.for_loop.variable_name, type_get_int(), false);
+
+            // Check guards
+            for (size_t g = 0; g < stmt->data.for_loop.guards.count; g++) {
+                AstType *guard_type = NULL;
+                res = check_expression(stmt->data.for_loop.guards.items[g], table, &guard_type);
+                if (res != ERR_OK) {
+                    symtable_pop_scope(table);
+                    return res;
+                }
+                if (guard_type->kind != AST_TYPE_BOOLEAN) {
+                    error_print(ERR_SEM_TYPE, stmt->pos, "For loop guard must be Boolean");
+                    symtable_pop_scope(table);
+                    return ERR_SEM_TYPE;
+                }
+            }
+
+            res = _check_block(stmt->data.for_loop.inside, table, enclosing_return_type, NULL);
+            symtable_pop_scope(table);
+            if (res != ERR_OK) return res;
+
+            if (out_type) *out_type = type_get_unit();
+            return ERR_OK;
+        }
+
+        default:
+            error_print(ERR_SEM_OTHER, stmt->pos, "Unsupported statement kind %d", stmt->kind);
+            return ERR_SEM_OTHER;
+    }
+}
+
+int semantic_pass2(AstProgram *program, Symtable *table) {
+    if (!program || !table) {
+        return ERR_INTERNAL;
+    }
+
+    for (size_t i = 0; i < program->count; i++) {
+        AstDefinition *def = &program->items[i];
+        if (def->kind != AST_DEF_FUNCTION) {
+            continue;
+        }
+
+        AstFunction *func = def->data.function;
+        if (!func) continue;
+
+        // Open local scope for function body and its parameters
+        symtable_push_scope(table);
+
+        // Insert parameters into local scope as immutable (val) variables
+        for (size_t list_idx = 0; list_idx < func->parameters.count; list_idx++) {
+            AstParameterList *plist = &func->parameters.items[list_idx];
+            for (size_t p = 0; p < plist->count; p++) {
+                AstParameter *param = &plist->items[p];
+                symtable_insert_variable(table, param->name, param->type, false);
+            }
+        }
+
+        // Check function body block
+        AstType *body_return_type = NULL;
+        int res = _check_block(func->inside, table, func->return_type, &body_return_type);
+        if (res != ERR_OK) {
+            symtable_pop_scope(table);
+            return res;
+        }
+
+        // Validate return type against body
+        if (func->return_type != NULL) {
+            // Function has explicit return type
+            // Spec section 2.3 rule 4: In an explicit Unit function, body value is discarded.
+            if (func->return_type->kind != AST_TYPE_UNIT &&
+                !type_is_compatible(func->return_type, body_return_type)) {
+                error_print(ERR_SEM_TYPE, func->pos,
+                            "Function '%s' declared return type '%s', but body evaluates to '%s'",
+                            func->name,
+                            ast_type_to_string(func->return_type->kind),
+                            ast_type_to_string(body_return_type->kind));
+                symtable_pop_scope(table);
+                return ERR_SEM_TYPE;
+            }
+        } else {
+            // Return type was omitted, infer it from the body!
+            func->return_type = ast_type_clone(body_return_type);
+            BstNode *fn_node = symtable_lookup(table, func->name);
+            if (fn_node) {
+                fn_node->data.type = func->return_type;
+            }
+        }
+
+        symtable_pop_scope(table);
+    }
+
+    return ERR_OK;
+}
+
 int analyze_semantics(AstProgram *program) {
     if (!program) {
         return ERR_INTERNAL;
@@ -209,7 +506,11 @@ int analyze_semantics(AstProgram *program) {
         return result;
     }
 
-    // Pass 2 will be called here
+    result = semantic_pass2(program, table);
+    if (result != ERR_OK) {
+        symtable_destroy(table);
+        return result;
+    }
 
     symtable_destroy(table);
     return ERR_OK;
