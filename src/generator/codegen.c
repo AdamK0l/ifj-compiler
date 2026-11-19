@@ -1039,3 +1039,141 @@ static void gen_direct(Gen *g, position pos, const char *label, const AstExpress
     emit(g, "CREATEFRAME");
     emit(g, "CALL %s", label);
 }
+
+/**
+ * Call a function value stored in a local variable (CALL LF@var).
+ * @param g      generator
+ * @param fv     variable holding the label
+ * @param ft     its function type, may be NULL
+ * @param al     argument lists
+ * @param first  index of the first list to use
+ * Leaves the result on the data stack.
+ */
+static void gen_indirect(Gen *g, const char *fv, const AstType *ft, const AstArgumentList *al, size_t first) {
+    for (size_t k = first; k < al->count; k++) {
+        const AstExpressionList *args = &al->items[k];
+        for (size_t i = 0; i < args->count; i++) {
+            int pk = K_NONE;
+            if (ft && ft->kind == AST_TYPE_FUNCTION && i < ft->function.parameter_count) {
+                pk = kind_of(ft->function.parameters[i]);
+            }
+            gen_expr_as(g, args->items[i], pk);
+            g->ctx->pending++;
+        }
+        g->ctx->pending -= (int)args->count;
+        emit(g, "CREATEFRAME");
+        emit(g, "CALL LF@%s", fv);
+        if (k + 1 < al->count) {
+            fv = ctx_temp(g, "fv");
+            emit(g, "POPS LF@%s", fv);
+            ft = (ft && ft->kind == AST_TYPE_FUNCTION) ? ft->function.result : NULL;
+        }
+    }
+}
+
+/**
+ * Call the returned function value with the argument lists left over after a direct call.
+ * @param g   generator
+ * @param fn  called function
+ * @param al  argument lists of the call
+ */
+static void gen_after_direct(Gen *g, const AstFunction *fn, const AstArgumentList *al) {
+    size_t np = fn->parameters.count;
+    if (al && al->count > np) {
+        char *fv = ctx_temp(g, "fv");
+        emit(g, "POPS LF@%s", fv);
+        gen_indirect(g, fv, fn->return_type, al, np);
+    }
+}
+
+/**
+ * Generate receiver.name: built-in member (toString, toInt, floor, length) or extension method.
+ * @param g   generator
+ * @param m   member expression
+ * @param al  argument lists if it is called, else NULL
+ * Leaves one value on the data stack.
+ */
+static void gen_member(Gen *g, const AstExpression *m, const AstArgumentList *al) {
+    const AstExpression *recv = m->data.member.receiver;
+    const char *name = m->data.member.name;
+    const AstType *rt = expr_type(g, recv);
+    int rk = kind_of(rt);
+    int id = -1;
+    if (strcmp(name, "toString") == 0) {
+        id = BI_TO_STR;
+    } else if (strcmp(name, "toInt") == 0 && rk == AST_TYPE_DOUBLE) {
+        id = BI_TO_INT;
+    } else if (strcmp(name, "floor") == 0 && rk == AST_TYPE_DOUBLE) {
+        id = BI_FLOOR;
+    } else if (strcmp(name, "length") == 0 && rk == AST_TYPE_STRING) {
+        id = BI_STR_LENGTH;
+    }
+    if (id >= 0) {
+        gen_expr(g, recv);
+        call_builtin(g, id);
+        return;
+    }
+    if (rt == NULL) {
+        fail_at(g, m->pos, "receiver of member '%s' has no evaluated_type", name);
+        return;
+    }
+    const ExtInfo *x = find_ext(g, rt, name);
+    if (x == NULL) {
+        fail_at(g, m->pos, "unknown member '%s' of type %s", name, kind_name(rk));
+        return;
+    }
+    gen_direct(g, m->pos, x->label, recv, &x->fn->parameters, al);
+    gen_after_direct(g, x->fn, al);
+}
+
+/**
+ * Generate any call (member, function value, user function, built-in, general expression).
+ * @param g  generator
+ * @param e  call expression
+ * Leaves the result on the data stack.
+ */
+static void gen_call(Gen *g, const AstExpression *e) {
+    const AstExpression *callee = e->data.call.callee;
+    const AstArgumentList *al = &e->data.call.arguments;
+
+    if (callee->kind == AST_EXPR_MEMBER) {
+        gen_member(g, callee, al);
+        return;
+    }
+    if (callee->kind == AST_EXPR_NAME) {
+        const char *name = callee->data.name;
+        const Var *v = scope_lookup(g, name);
+        if (v) { /* proměnná s funkční hodnotou */
+            gen_indirect(g, v->mangled, v->type, al, 0);
+            return;
+        }
+        const FuncInfo *f = find_func(g, name);
+        if (f) {
+            gen_direct(g, e->pos, f->label, NULL, &f->fn->parameters, al);
+            gen_after_direct(g, f->fn, al);
+            return;
+        }
+        int b = builtin_find(name);
+        if (b < 0) {
+            fail_at(g, e->pos, "call to undefined function '%s'", name);
+            return;
+        }
+        const Builtin *bi = &BUILTINS[b];
+        if (al->count != 1 || al->items[0].count != (size_t)bi->nparams) {
+            fail_at(g, e->pos, "argument counts do not match for built-in function '%s'", name);
+            return;
+        }
+        for (int i = 0; i < bi->nparams; i++) {
+            gen_expr_as(g, al->items[0].items[i], bi->params[i] == PK_DOUBLE ? AST_TYPE_DOUBLE : K_NONE);
+            g->ctx->pending++;
+        }
+        g->ctx->pending -= bi->nparams;
+        call_builtin(g, b);
+        return;
+    }
+    /* callee je obecný výraz (volání vracející funkci, lambda, ...) */
+    gen_expr(g, callee);
+    char *fv = ctx_temp(g, "fv");
+    emit(g, "POPS LF@%s", fv);
+    gen_indirect(g, fv, expr_type(g, callee), al, 0);
+}
