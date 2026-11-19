@@ -180,12 +180,48 @@ static bool _find_keyword(const DynamicString *word, KeywordType *keyword) {
     return false;
 }
 
+// Pushes a mode onto the istring stack
+static ErrorCode _push_istring_mode(Scanner *scanner, IStringMode mode) {
+    if (scanner->istring_depth == SCANNER_MAX_ISTRING_DEPTH) {
+        error_print_no_pos(ERR_INTERNAL, "interpolated strings are nested too deep");
+        return ERR_INTERNAL;
+    }
+
+    scanner->istring_modes[scanner->istring_depth] = mode;
+    scanner->istring_depth++;
+    return ERR_OK;
+}
+
+// Returns true if the scanner is inside the text of an istring
+static bool _in_isting_text(const Scanner *scanner) {
+    return scanner->istring_depth > 0 &&
+           scanner->istring_modes[scanner->istring_depth - 1] != ISTRING_MODE_EXPR;
+}
+
+// Starts an istring
+static ErrorCode _start_istring(Scanner *scanner, Token *token) {
+    // Skips the opening "
+    _next_char(scanner);
+
+    // for the time being multiline istring is not recognised
+    ErrorCode result = _push_istring_mode(scanner, ISTRING_MODE_TEXT);
+    if (result != ERR_OK) {
+        return result;
+    }
+    return _make_token(token, TOKEN_ISTRING_BEGIN);
+}
+
 // Reads the identifier or keyword, first character must be a letter or '_'
 static ErrorCode _read_identifier(Scanner *scanner, Token *token) {
     // Collects the word into the buffer
     ErrorCode result = _read_word(scanner);
     if (result != ERR_OK) {
         return result;
+    }
+
+    // 's"' starts an istring
+    if (dstring_compare_str(&scanner->buffer, "s") == 0 && scanner->current == '"') {
+        return _start_istring(scanner, token);
     }
 
     // The '_' is a special token
@@ -328,6 +364,40 @@ static ErrorCode _read_string(Scanner *scanner, Token *token) {
     // Skips the last '"', the token gets the copy of the string
     _next_char(scanner);
     token->type = TOKEN_STRING_LITERAL;
+    return _copy_buffer(scanner, token);
+}
+
+// Reads the next part of the istring
+static ErrorCode _read_istring_text(Scanner *scanner, Token *token) {
+    // The closing " ends the istring
+    if (scanner->current == '"') {
+        _next_char(scanner);
+        scanner->istring_depth--;
+        return _make_token(token, TOKEN_ISTRING_END);
+    }
+
+    // The text until the closing " is ISTRING_PART
+    dstring_clear(&scanner->buffer);
+    while (scanner->current != '"') {
+        if (scanner->current == '\n' || scanner->current == EOF) {
+            return _token_error(token, "undetermined interpolated string literal");
+        }
+
+        // for the time being $ is only text
+        //  Escape sequences are decoded like in a normal string
+        ErrorCode result;
+        if (scanner->current == '\\') {
+            result = _read_escape(scanner, token);
+        } else {
+            result = _add_char(scanner);
+        }
+
+        if (result != ERR_OK) {
+            return result;
+        }
+    }
+
+    token->type = TOKEN_ISTRING_PART;
     return _copy_buffer(scanner, token);
 }
 
@@ -697,6 +767,13 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
         token->line = scanner->line;
         token->column = scanner->column;
         return _make_token(token, TOKEN_DEDENT);
+    }
+
+    // Inside the istring everything is read as is
+    if (_in_isting_text(scanner)) {
+        token->line = scanner->line;
+        token->column = scanner->column;
+        return _read_istring_text(scanner, token);
     }
 
     // Skips whitespaces and empty lines, line break after a token ends the line with EOL
