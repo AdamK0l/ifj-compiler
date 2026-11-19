@@ -156,7 +156,7 @@ bool parse_function(Parser *p){
     if(!check(p, TOKEN_IDENTIFIER)) return syntax_error(p, "function name");
     char *name = take_string(p);
     advance(p);
-    free(name);
+    free(name); //temporary free
 
     if(!parser_expect(p, TOKEN_LEFT_PAREN, "'('")) return false;
 
@@ -164,7 +164,9 @@ bool parse_function(Parser *p){
 
     if(!parser_expect(p, TOKEN_RIGHT_PAREN, "')'")) return false;
 
-    if(!parse_opt_type(p)) return false;
+    AstType *ret_type = NULL;
+    if(!parse_opt_type(p, &ret_type)) return false;
+    ast_type_free(ret_type);//temporary free to avoid leaks til i dont create an AST node 
 
     if(!parser_expect_operator(p, OP_ASSIGN, "'='")) return false;
 
@@ -194,8 +196,51 @@ bool parse_opt_main(Parser *p){
 
 }
 
-bool parse_opt_type(Parser *p){
-    (void)p; return true;
+/*
+8.  <type>	-> INT			PREDICT: { INT }
+9.  <type>  -> DOUBLE		PREDICT: { DOUBLE }
+10. <type>	-> STRING		PREDICT: { STRING }
+11. <type>	-> UNIT			PREDICT: { UNIT }
+12. <type>	-> BOOLEAN		PREDICT: { BOOLEAN }
+*/
+AstType *parse_type(Parser *p){
+    AstTypeKind kind;
+
+    if(check_keyword(p, KW_INT)) {
+        kind = AST_TYPE_INT;
+    }else if (check_keyword(p, KW_DOUBLE)){
+        kind = AST_TYPE_DOUBLE;
+    }else if (check_keyword(p, KW_STRING)){
+        kind = AST_TYPE_STRING;
+    }else if (check_keyword(p, KW_BOOLEAN)){
+        kind =  AST_TYPE_BOOLEAN;
+    }else if (check_keyword(p, KW_UNIT)) {
+        kind = AST_TYPE_UNIT;
+    }else {
+        syntax_error(p, "type");
+        return NULL;
+    }
+    advance(p);
+    return ast_type_create(kind);
+    
+}
+
+/* 
+6.  <opt_type>	-> COLON <type>	     PREDICT: { COLON }
+7.  <opt_type>	-> epsilon		     PREDICT: { ASSIGN }
+*/
+bool parse_opt_type(Parser *p, AstType **out){
+    *out = NULL;
+
+    if(check(p, TOKEN_COLON)) {
+        advance(p);
+        *out = parse_type(p);
+        return *out != NULL;
+    }
+    if(check_operator(p, OP_ASSIGN)) {
+        return true;
+    }
+    return syntax_error(p, "':' or '='");
 }
 
 bool parse_block(Parser *p){
