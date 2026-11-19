@@ -774,3 +774,68 @@ static const ExtInfo *find_ext(Gen *g, const AstType *recv, const char *name) {
     return NULL;
 }
 
+/* ------------------------------------------------------------ expression types */
+
+/**
+ * Type of an expression: evaluated_type, else inferred for simple cases.
+ * @param g  generator
+ * @param e  expression
+ * @return   type, or NULL if unknown
+ */
+static const AstType *expr_type(Gen *g, const AstExpression *e) {
+    if (e->evaluated_type) {
+        return e->evaluated_type;
+    }
+    switch (e->kind) {
+    case AST_EXPR_INT:
+        return &TY_INT;
+    case AST_EXPR_DOUBLE:
+        return &TY_DOUBLE;
+    case AST_EXPR_STRING:
+    case AST_EXPR_INTERPOLATED_STRING:
+        return &TY_STRING;
+    case AST_EXPR_BOOLEAN:
+        return &TY_BOOL;
+    case AST_EXPR_UNIT:
+        return &TY_UNIT;
+    case AST_EXPR_NAME: {
+        const Var *v = scope_lookup(g, e->data.name);
+        if (v) {
+            return v->type;
+        }
+        const FuncInfo *f = find_func(g, e->data.name);
+        return (f && f->fn->parameters.count == 0) ? f->fn->return_type : NULL;
+    }
+    case AST_EXPR_UNARY:
+        return e->data.unary.op == AST_UNARY_NOT ? &TY_BOOL : expr_type(g, e->data.unary.operand);
+    case AST_EXPR_BINARY: {
+        AstBinaryOp op = e->data.binary.op;
+        if (op >= AST_EQUAL) {
+            return &TY_BOOL;
+        }
+        const AstType *l = expr_type(g, e->data.binary.left);
+        const AstType *r = expr_type(g, e->data.binary.right);
+        if (!l || !r) {
+            return NULL;
+        }
+        if (l->kind == AST_TYPE_STRING) {
+            return l;
+        }
+        return (l->kind == AST_TYPE_DOUBLE || r->kind == AST_TYPE_DOUBLE) ? &TY_DOUBLE : l;
+    }
+    case AST_EXPR_CALL: {
+        const AstExpression *c = e->data.call.callee;
+        if (c->kind != AST_EXPR_NAME || scope_lookup(g, c->data.name)) {
+            return NULL;
+        }
+        const FuncInfo *f = find_func(g, c->data.name);
+        if (f) {
+            return e->data.call.arguments.count == f->fn->parameters.count ? f->fn->return_type : NULL;
+        }
+        int b = builtin_find(c->data.name);
+        return b >= 0 ? prim_type(BUILTINS[b].ret) : NULL;
+    }
+    default:
+        return NULL;
+    }
+}
