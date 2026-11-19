@@ -399,7 +399,6 @@ static ErrorCode _read_token(Scanner *scanner, Token *token) {
     case '*':
         _next_char(scanner);
         return _operator_token(token, OP_MUL);
-    // for the time being comments are not recognised
     case '/':
         _next_char(scanner);
         return _operator_token(token, OP_DIV);
@@ -484,6 +483,15 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
             }
             _next_char(scanner);
         }
+
+        // A line comment is skipped until \n or EOF, line break is handled below
+        if (scanner->current == '/' && scanner->next == '/') {
+            while (scanner->current != '\n' && scanner->current != EOF) {
+                _next_char(scanner);
+            }
+            continue;
+        }
+
         if (scanner->current != '\n') {
             break;
         }
