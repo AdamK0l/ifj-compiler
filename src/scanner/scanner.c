@@ -229,7 +229,7 @@ static ErrorCode _read_digits(Scanner *scanner, Token *token) {
     return ERR_OK;
 }
 
-// Reads an integer, the first char is a digit
+// Reads an integer or double, the first char is a digit or a '.'
 static ErrorCode _read_number(Scanner *scanner, Token *token) {
     // This rejects any number that starts with a 0 (01 or 0_1) except the 0 itself
     if (scanner->current == '0' && (isdigit(scanner->next) || scanner->next == '_')) {
@@ -448,8 +448,11 @@ static ErrorCode _read_token(Scanner *scanner, Token *token) {
     case ',':
         _next_char(scanner);
         return _make_token(token, TOKEN_COMMA);
-    // for the time being doubles with a dot are not recognised
+    // A '.' before a deigit is a double, otherwise its a DOT token
     case '.':
+        if (isdigit(scanner->next)) {
+            return _read_number(scanner, token);
+        }
         _next_char(scanner);
         return _make_token(token, TOKEN_DOT);
 
