@@ -244,10 +244,66 @@ static ErrorCode _read_escape(Scanner *scanner, Token *token) {
     return ERR_OK;
 }
 
+// Reads multiline string literal, everything is taken as is, there are no escape sequence
+static ErrorCode _read_multiline_string(Scanner *scanner, Token *token) {
+    dstring_clear(&scanner->buffer);
+
+    while (true) {
+        if (scanner->current == EOF) {
+            return _token_error(token, "unterminated multiline string literal");
+        }
+
+        // Quotes are counted, three or more of them in a row ends the string
+        if (scanner->current == '"') {
+            int quotes = 0;
+            while (scanner->current == '"') {
+                quotes++;
+                _next_char(scanner);
+            }
+
+            // The last 3 quotes close the string, the extra ones before are part of the text
+            // One or two quotes ar only text
+            int text_quotes = quotes;
+            if (quotes >= 3) {
+                text_quotes = quotes - 3;
+            }
+
+            for (int i = 0; i < text_quotes; i++) {
+                if (!dstring_append_char(&scanner->buffer, '"')) {
+                    error_print_no_pos(ERR_INTERNAL, "out of memory");
+                    return ERR_INTERNAL;
+                }
+            }
+
+            if (quotes >= 3) {
+                break;
+            }
+            continue;
+        }
+
+        // Any other character is added as is
+        ErrorCode result = _add_char(scanner);
+        if (result != ERR_OK) {
+            return result;
+        }
+    }
+
+    token->type = TOKEN_STRING_LITERAL;
+    return _copy_buffer(scanner, token);
+}
+
 // Reads string literal
 static ErrorCode _read_string(Scanner *scanner, Token *token) {
     // Skips the first '"', text of the string is collected into the buffer
     _next_char(scanner);
+
+    // Two or more quotes -> change to a multinine string
+    if (scanner->current == '"' && scanner->next == '"') {
+        _next_char(scanner);
+        _next_char(scanner);
+        return _read_multiline_string(scanner, token);
+    }
+
     dstring_clear(&scanner->buffer);
 
     while (scanner->current != '"') {
@@ -618,7 +674,7 @@ static ErrorCode _read_token(Scanner *scanner, Token *token) {
         _next_char(scanner);
         return _read_main(scanner, token);
 
-    // for the time being multiple line string are not recognised
+    // String literals
     case '"':
         return _read_string(scanner, token);
 
