@@ -58,7 +58,7 @@ typedef struct {
  * Report out of memory (internal error, exit code 99) and terminate.
  */
 static void oom(void) {
-    fputs("codegen: nedostatek pameti\n", stderr);
+    fputs("codegen: not enough memory\n", stderr);
     exit(ERR_INTERNAL);
 }
 
@@ -1524,7 +1524,7 @@ static void gen_stmt(Gen *g, const AstStatement *s) {
         const AstExpression *init = s->data.variable.initializer;
         const AstType *t = dt ? dt : expr_type(g, init);
         if (t == NULL) {
-            fail_at(g, s->pos, "promenna '%s' nema urceny typ", s->data.variable.name);
+            fail_at(g, s->pos, "variable '%s' has no declared type", s->data.variable.name);
             return;
         }
         gen_expr_as(g, init, kind_of(t)); /* initialization is calculated before the name is defined */
@@ -1536,7 +1536,7 @@ static void gen_stmt(Gen *g, const AstStatement *s) {
     case AST_STATEMENT_ASSIGN: {
         const Var *v = scope_lookup(g, s->data.assignment.name);
         if (v == NULL) {
-            fail_at(g, s->pos, "prirazeni do nedefinovane promenne '%s'", s->data.assignment.name);
+            fail_at(g, s->pos, "assignment to undefined variable '%s'", s->data.assignment.name);
             return;
         }
         gen_expr_as(g, s->data.assignment.value, kind_of(v->type));
