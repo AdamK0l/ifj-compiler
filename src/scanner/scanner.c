@@ -376,14 +376,26 @@ static ErrorCode _read_istring_text(Scanner *scanner, Token *token) {
         return _make_token(token, TOKEN_ISTRING_END);
     }
 
-    // The text until the closing " is ISTRING_PART
+    // for the time being $name and ${..} are not recognised
+    // A standalone $ must be followed by a variable name or '{'
+    if (scanner->current == '$' && scanner->next != '$') {
+        return _token_error(token, "invalid use of '$' in interpolated string");
+    }
+
+    // The text until the next $ or closing " is ISTRING_PART
     dstring_clear(&scanner->buffer);
     while (scanner->current != '"') {
         if (scanner->current == '\n' || scanner->current == EOF) {
             return _token_error(token, "undetermined interpolated string literal");
         }
 
-        // for the time being $ is only text
+        // "$$" is one '$', any other $ starts a value
+        if (scanner->current == '$') {
+            if (scanner->next != '$') {
+                break;
+            }
+            _next_char(scanner);
+        }
         //  Escape sequences are decoded like in a normal string
         ErrorCode result;
         if (scanner->current == '\\') {
