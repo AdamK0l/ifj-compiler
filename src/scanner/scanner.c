@@ -320,19 +320,15 @@ static ErrorCode _skip_block_comment(Scanner *scanner, Token *token, bool *had_n
         }
 
         if (scanner->current == '/' && scanner->next == '*') {
-            _next_char(scanner);
-            _next_char(scanner);
             depth++;
+            _next_char(scanner);
         } else if (scanner->current == '*' && scanner->next == '/') {
-            _next_char(scanner);
-            _next_char(scanner);
             depth--;
-        } else {
-            if (scanner->current == '\n') {
-                *had_newline = true;
-            }
             _next_char(scanner);
+        } else if (scanner->current == '\n') {
+            *had_newline = true;
         }
+        _next_char(scanner);
     }
     return ERR_OK;
 }
