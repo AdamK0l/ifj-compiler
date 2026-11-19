@@ -193,7 +193,7 @@ static ErrorCode _push_istring_mode(Scanner *scanner, IStringMode mode) {
 }
 
 // Returns true if the scanner is inside the text of an istring
-static bool _in_isting_text(const Scanner *scanner) {
+static bool _in_istring_text(const Scanner *scanner) {
     return scanner->istring_depth > 0 &&
            scanner->istring_modes[scanner->istring_depth - 1] != ISTRING_MODE_EXPR;
 }
@@ -746,7 +746,6 @@ static ErrorCode _read_token(Scanner *scanner, Token *token) {
     }
 
     switch (scanner->current) {
-    // Parentheses, for the time being it doesnt handle indentations
     case '(':
         _next_char(scanner);
         return _make_token(token, TOKEN_LEFT_PAREN);
@@ -878,7 +877,7 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
     }
 
     // Inside the istring everything is read as is
-    if (_in_isting_text(scanner)) {
+    if (_in_istring_text(scanner)) {
         token->line = scanner->line;
         token->column = scanner->column;
         return _read_istring_text(scanner, token);
