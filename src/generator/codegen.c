@@ -1508,3 +1508,98 @@ static void gen_for(Gen *g, const AstStatement *s) {
     free(step_op);
     free(to_op);
 }
+
+/**
+ * Generate one statement (value of an expression statement is dropped).
+ * @param g  generator
+ * @param s  statement
+ */
+static void gen_stmt(Gen *g, const AstStatement *s) {
+    if (g->error) {
+        return;
+    }
+    switch (s->kind) {
+    case AST_STATEMENT_VARIABLE: {
+        const AstType *dt = s->data.variable.declared_type;
+        const AstExpression *init = s->data.variable.initializer;
+        const AstType *t = dt ? dt : expr_type(g, init);
+        if (t == NULL) {
+            fail_at(g, s->pos, "promenna '%s' nema urceny typ", s->data.variable.name);
+            return;
+        }
+        gen_expr_as(g, init, kind_of(t)); /* initialization is calculated before the name is defined */
+        const char *m = scope_declare(g, s->data.variable.name, t);
+        note(g, s->data.variable.is_changeable ? "var" : "val", m);
+        emit(g, "POPS LF@%s", m);
+        break;
+    }
+    case AST_STATEMENT_ASSIGN: {
+        const Var *v = scope_lookup(g, s->data.assignment.name);
+        if (v == NULL) {
+            fail_at(g, s->pos, "prirazeni do nedefinovane promenne '%s'", s->data.assignment.name);
+            return;
+        }
+        gen_expr_as(g, s->data.assignment.value, kind_of(v->type));
+        emit(g, "POPS LF@%s", v->mangled);
+        break;
+    }
+    case AST_STATEMENT_EXPRESSION:
+        if (s->data.expression->kind == AST_EXPR_IF) {
+            gen_conditional(g, s->data.expression, false);
+        } else {
+            gen_expr(g, s->data.expression);
+            emit(g, "POPS " DISCARD); /* the result of a standalone expression is discarded */
+        }
+        break;
+    case AST_STATEMENT_RETURN:
+        note(g, "return", "");
+        gen_return(g, s, g->ctx->ret_kind);
+        break;
+    case AST_STATEMENT_WHILE: {
+        unsigned l_start = new_label(g), l_end = new_label(g);
+        emit(g, "LABEL $L%u", l_start);
+        gen_jump_if_false(g, s->data.while_loop.condition, l_end);
+        gen_block(g, s->data.while_loop.inside, false, K_NONE);
+        emit(g, "JUMP $L%u", l_start);
+        emit(g, "LABEL $L%u", l_end);
+        break;
+    }
+    case AST_STATEMENT_FOR:
+        gen_for(g, s);
+        break;
+    }
+}
+
+/**
+ * Generate a block in its own scope.
+ * @param g           generator
+ * @param b           block
+ * @param want_value  true: leave the value of the last statement (() if not an expression)
+ * @param target      kind to convert the value to; Unit drops it and gives ()
+ */
+static void gen_block(Gen *g, const AstBLOCK *b, bool want_value, int target) {
+    if (want_value && target == AST_TYPE_UNIT) {
+        gen_block(g, b, false, K_NONE);
+        emit(g, "PUSHS nil@nil");
+        return;
+    }
+    scope_push(g);
+    size_t n = b->statements.count;
+    for (size_t i = 0; i < n; i++) {
+        const AstStatement *s = b->statements.items[i];
+        if (want_value && i + 1 == n) {
+            if (s->kind == AST_STATEMENT_EXPRESSION) {
+                gen_expr_as(g, s->data.expression, target);
+            } else {
+                gen_stmt(g, s);
+                emit(g, "PUSHS nil@nil");
+            }
+        } else {
+            gen_stmt(g, s);
+        }
+    }
+    if (want_value && n == 0) {
+        emit(g, "PUSHS nil@nil");
+    }
+    scope_pop(g);
+}
