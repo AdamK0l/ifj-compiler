@@ -396,4 +396,16 @@ AstParameterList *ast_parameter_lists_push(AstParameterLists *lists);
 AstExpressionList *ast_argument_lists_push(AstArgumentList *lists);
 void ast_definition_push(AstProgram *program, AstDefinition definition);
 
+
+/* ==================== Debug dump ==================== */
+/* AI-generated (Claude). Prompt: "declarations for ast_dump" */
+#include <stdio.h>
+
+void ast_dump_type(FILE *out, const AstType *type);
+void ast_dump_expression(FILE *out, const AstExpression *e, int depth);
+void ast_dump_statement(FILE *out, const AstStatement *s, int depth);
+void ast_dump_block(FILE *out, const AstBLOCK *block, int depth);
+void ast_dump_function(FILE *out, const AstFunction *f, int depth);
+void ast_dump_program(FILE *out, const AstProgram *program);
+
 #endif

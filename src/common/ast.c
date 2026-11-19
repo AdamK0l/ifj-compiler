@@ -655,3 +655,278 @@ void ast_free_program(AstProgram *program) {
     program->count = 0;
     program->capacity = 0;
 }
+
+/* ==================== Debug dump ==================== */
+
+/* AI-generated (Claude). Prompt: "ast_dump for our ast.h: prints the tree with
+ * two-space indentation per level, one node per line, recursive like the free
+ * functions; for debugging and parser tests" */
+
+/* Indents the line by two spaces per tree level. */
+static void dump_indent(FILE *out, int depth) {
+    for (int i = 0; i < depth; i++) {
+        fputs("  ", out);
+    }
+}
+
+/* Operator symbol for printing. */
+static const char *dump_binary_op(AstBinaryOp op) {
+    switch (op) {
+    case AST_ADD: return "+";
+    case AST_SUBTRACT: return "-";
+    case AST_MULTIPLY: return "*";
+    case AST_DIVIDE: return "/";
+    case AST_EQUAL: return "==";
+    case AST_NOT_EQUAL: return "!=";
+    case AST_LESS: return "<";
+    case AST_LESS_EQUAL: return "<=";
+    case AST_GREATER: return ">";
+    case AST_GREATER_EQUAL: return ">=";
+    case AST_AND: return "&&";
+    case AST_OR: return "||";
+    }
+    return "?";
+}
+
+static const char *dump_unary_op(AstUnaryOp op) {
+    switch (op) {
+    case AST_UNARY_PLUS: return "+";
+    case AST_UNARY_MINUS: return "-";
+    case AST_UNARY_NOT: return "!";
+    }
+    return "?";
+}
+
+/* Prints a type on the current line, e.g. "Int" or "(Int, Double) => String". */
+void ast_dump_type(FILE *out, const AstType *type) {
+    if (type == NULL) {
+        fputs("?", out);
+        return;
+    }
+    if (type->kind != AST_TYPE_FUNCTION) {
+        fputs(ast_type_to_string(type->kind), out);
+        return;
+    }
+    fputc('(', out);
+    for (size_t i = 0; i < type->function.parameter_count; i++) {
+        if (i > 0) {
+            fputs(", ", out);
+        }
+        ast_dump_type(out, type->function.parameters[i]);
+    }
+    fputs(") => ", out);
+    ast_dump_type(out, type->function.result);
+}
+
+/* Prints one parameter list on the current line: "(a: Int, b: Double)". */
+static void dump_parameter_list(FILE *out, const AstParameterList *list) {
+    fputc('(', out);
+    for (size_t i = 0; i < list->count; i++) {
+        if (i > 0) {
+            fputs(", ", out);
+        }
+        fprintf(out, "%s: ", list->items[i].name);
+        ast_dump_type(out, list->items[i].type);
+    }
+    fputc(')', out);
+}
+
+void ast_dump_expression(FILE *out, const AstExpression *e, int depth) {
+    dump_indent(out, depth);
+    if (e == NULL) {
+        fputs("(null)\n", out);
+        return;
+    }
+
+    switch (e->kind) {
+    case AST_EXPR_INT:
+        fprintf(out, "INT %d\n", (int)e->data.int_value);
+        break;
+    case AST_EXPR_DOUBLE:
+        fprintf(out, "DOUBLE %g\n", e->data.double_value);
+        break;
+    case AST_EXPR_STRING:
+        fprintf(out, "STRING \"%.*s\"\n", (int)e->data.string_value.length,
+                e->data.string_value.data ? e->data.string_value.data : "");
+        break;
+    case AST_EXPR_BOOLEAN:
+        fprintf(out, "BOOL %s\n", e->data.boolean_value ? "true" : "false");
+        break;
+    case AST_EXPR_UNIT:
+        fputs("UNIT ()\n", out);
+        break;
+    case AST_EXPR_NAME:
+        fprintf(out, "NAME %s\n", e->data.name);
+        break;
+
+    case AST_EXPR_BINARY:
+        fprintf(out, "BINARY %s\n", dump_binary_op(e->data.binary.op));
+        ast_dump_expression(out, e->data.binary.left, depth + 1);
+        ast_dump_expression(out, e->data.binary.right, depth + 1);
+        break;
+
+    case AST_EXPR_UNARY:
+        fprintf(out, "UNARY %s\n", dump_unary_op(e->data.unary.op));
+        ast_dump_expression(out, e->data.unary.operand, depth + 1);
+        break;
+
+    case AST_EXPR_CALL:
+        fputs("CALL\n", out);
+        ast_dump_expression(out, e->data.call.callee, depth + 1);
+        for (size_t i = 0; i < e->data.call.arguments.count; i++) {
+            const AstExpressionList *args = &e->data.call.arguments.items[i];
+            dump_indent(out, depth + 1);
+            fprintf(out, "ARGS (%zu)\n", args->count);
+            for (size_t j = 0; j < args->count; j++) {
+                ast_dump_expression(out, args->items[j], depth + 2);
+            }
+        }
+        break;
+
+    case AST_EXPR_MEMBER:
+        fprintf(out, "MEMBER .%s\n", e->data.member.name);
+        ast_dump_expression(out, e->data.member.receiver, depth + 1);
+        break;
+
+    case AST_EXPR_IF:
+        fputs("IF\n", out);
+        ast_dump_expression(out, e->data.conditional.condition, depth + 1);
+        dump_indent(out, depth + 1);
+        fputs("THEN\n", out);
+        ast_dump_block(out, e->data.conditional.then_branch, depth + 2);
+        if (e->data.conditional.else_branch != NULL) {
+            dump_indent(out, depth + 1);
+            fputs("ELSE\n", out);
+            ast_dump_block(out, e->data.conditional.else_branch, depth + 2);
+        }
+        break;
+
+    case AST_EXPR_LAMBDA:
+        fputs("LAMBDA ", out);
+        dump_parameter_list(out, &e->data.lambda.parameters);
+        fputc('\n', out);
+        ast_dump_block(out, e->data.lambda.inside, depth + 1);
+        break;
+
+    case AST_EXPR_INTERPOLATED_STRING:
+        fputs("INTERPOLATED\n", out);
+        for (size_t i = 0; i < e->data.interpolated_string.count; i++) {
+            const AstStringPart *part = &e->data.interpolated_string.items[i];
+            if (part->kind == AST_STRING_TEXT) {
+                dump_indent(out, depth + 1);
+                fprintf(out, "TEXT \"%.*s\"\n", (int)part->data.text.length,
+                        part->data.text.data ? part->data.text.data : "");
+            } else {
+                ast_dump_expression(out, part->data.expression, depth + 1);
+            }
+        }
+        break;
+    }
+}
+
+void ast_dump_statement(FILE *out, const AstStatement *s, int depth) {
+    dump_indent(out, depth);
+    if (s == NULL) {
+        fputs("(null)\n", out);
+        return;
+    }
+
+    switch (s->kind) {
+    case AST_STATEMENT_VARIABLE:
+        fprintf(out, "%s %s", s->data.variable.is_changeable ? "VAR" : "VAL",
+                s->data.variable.name);
+        if (s->data.variable.declared_type != NULL) {
+            fputs(" : ", out);
+            ast_dump_type(out, s->data.variable.declared_type);
+        }
+        fputc('\n', out);
+        ast_dump_expression(out, s->data.variable.initializer, depth + 1);
+        break;
+
+    case AST_STATEMENT_ASSIGN:
+        fprintf(out, "ASSIGN %s\n", s->data.assignment.name);
+        ast_dump_expression(out, s->data.assignment.value, depth + 1);
+        break;
+
+    case AST_STATEMENT_EXPRESSION:
+        fputs("EXPR\n", out);
+        ast_dump_expression(out, s->data.expression, depth + 1);
+        break;
+
+    case AST_STATEMENT_RETURN:
+        fputs("RETURN\n", out);
+        if (s->data.return_value != NULL) {
+            ast_dump_expression(out, s->data.return_value, depth + 1);
+        }
+        break;
+
+    case AST_STATEMENT_WHILE:
+        fputs("WHILE\n", out);
+        ast_dump_expression(out, s->data.while_loop.condition, depth + 1);
+        ast_dump_block(out, s->data.while_loop.inside, depth + 1);
+        break;
+
+    case AST_STATEMENT_FOR:
+        fprintf(out, "FOR %s (%s)\n", s->data.for_loop.variable_name,
+                s->data.for_loop.inclusive ? "to" : "until");
+        ast_dump_expression(out, s->data.for_loop.from, depth + 1);
+        ast_dump_expression(out, s->data.for_loop.to, depth + 1);
+        if (s->data.for_loop.step != NULL) {
+            dump_indent(out, depth + 1);
+            fputs("BY\n", out);
+            ast_dump_expression(out, s->data.for_loop.step, depth + 2);
+        }
+        for (size_t i = 0; i < s->data.for_loop.guards.count; i++) {
+            dump_indent(out, depth + 1);
+            fputs("GUARD\n", out);
+            ast_dump_expression(out, s->data.for_loop.guards.items[i], depth + 2);
+        }
+        ast_dump_block(out, s->data.for_loop.inside, depth + 1);
+        break;
+    }
+}
+
+void ast_dump_block(FILE *out, const AstBLOCK *block, int depth) {
+    dump_indent(out, depth);
+    if (block == NULL) {
+        fputs("(null block)\n", out);
+        return;
+    }
+    fputs("BLOCK\n", out);
+    for (size_t i = 0; i < block->statements.count; i++) {
+        ast_dump_statement(out, block->statements.items[i], depth + 1);
+    }
+}
+
+void ast_dump_function(FILE *out, const AstFunction *f, int depth) {
+    dump_indent(out, depth);
+    fprintf(out, "%sDEF %s", f->is_main ? "@main " : "", f->name);
+    for (size_t i = 0; i < f->parameters.count; i++) {
+        dump_parameter_list(out, &f->parameters.items[i]);
+    }
+    if (f->return_type != NULL) {
+        fputs(" : ", out);
+        ast_dump_type(out, f->return_type);
+    }
+    fputc('\n', out);
+    ast_dump_block(out, f->inside, depth + 1);
+}
+
+void ast_dump_program(FILE *out, const AstProgram *program) {
+    fputs("PROGRAM\n", out);
+    for (size_t i = 0; i < program->count; i++) {
+        const AstDefinition *def = &program->items[i];
+        if (def->kind == AST_DEF_FUNCTION) {
+            ast_dump_function(out, def->data.function, 1);
+        } else {
+            const AstExtension *ext = def->data.extension;
+            dump_indent(out, 1);
+            fprintf(out, "EXTENSION (%s: ", ext->receiver.name);
+            ast_dump_type(out, ext->receiver.type);
+            fputs(")\n", out);
+            for (size_t j = 0; j < ext->method_count; j++) {
+                ast_dump_function(out, ext->methods[j], 2);
+            }
+        }
+    }
+}
