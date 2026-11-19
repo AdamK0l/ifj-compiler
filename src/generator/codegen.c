@@ -564,7 +564,7 @@ typedef struct {
     size_t nlocals, cap_locals;
     Scope *scopes;
     size_t nscopes, cap_scopes;
-    const char *end_label; /* sem skáče return */
+    const char *end_label; /* return jumps here */
     int pending;           /* values of partially evaluated expressions on the stack */
     int ret_kind;          /* declared return type or K_NONE */
 } Ctx;
@@ -948,7 +948,7 @@ static void gen_binary(Gen *g, const AstExpression *e) {
         emit(g, "MULS");
         break;
     case AST_DIVIDE:
-        emit(g, t == AST_TYPE_DOUBLE ? "DIVS" : "IDIVS"); /* IDIVS zaokrouhluje k nule */
+        emit(g, t == AST_TYPE_DOUBLE ? "DIVS" : "IDIVS"); /* IDIVS rounds toward zero */
         break;
     case AST_LESS:
         emit(g, "LTS");
@@ -1143,7 +1143,7 @@ static void gen_call(Gen *g, const AstExpression *e) {
     if (callee->kind == AST_EXPR_NAME) {
         const char *name = callee->data.name;
         const Var *v = scope_lookup(g, name);
-        if (v) { /* proměnná s funkční hodnotou */
+        if (v) { /* A variable holding a function value */
             gen_indirect(g, v->mangled, v->type, al, 0);
             return;
         }
@@ -1171,9 +1171,152 @@ static void gen_call(Gen *g, const AstExpression *e) {
         call_builtin(g, b);
         return;
     }
-    /* callee je obecný výraz (volání vracející funkci, lambda, ...) */
+    /* The callee is a general expression (a call returning a function, a lambda, etc.) */
     gen_expr(g, callee);
     char *fv = ctx_temp(g, "fv");
     emit(g, "POPS LF@%s", fv);
     gen_indirect(g, fv, expr_type(g, callee), al, 0);
+}
+
+/**
+ * Generate a bare name: variable, call of a function without parameter list, or function reference.
+ * @param g  generator
+ * @param e  name expression
+ * Leaves one value on the data stack.
+ */
+static void gen_name(Gen *g, const AstExpression *e) {
+    const char *name = e->data.name;
+    const Var *v = scope_lookup(g, name);
+    if (v) {
+        emit(g, "PUSHS LF@%s", v->mangled);
+        return;
+    }
+    const FuncInfo *f = find_func(g, name);
+    if (f) {
+        if (f->fn->parameters.count == 0) {
+            gen_direct(g, e->pos, f->label, NULL, &f->fn->parameters, NULL);
+        } else {
+            emit(g, "PUSHS string@%s", f->label);
+        }
+        return;
+    }
+    int b = builtin_find(name);
+    if (b >= 0) {
+        g->builtin_used[b] = true;
+        emit(g, "PUSHS string@$ifj$%s", BUILTINS[b].name);
+        return;
+    }
+    fail_at(g, e->pos, "usage of undefined name '%s'", name);
+}
+
+static void gen_callable(Gen *g, const char *label, const char *shown, const AstParameter *params, size_t np,
+                         const AstParameter *recv, const AstBLOCK *body, int ret_kind);
+
+/**
+ * Compile a lambda into its own function $lambda$N; its value is the label string.
+ * @param g  generator
+ * @param e  lambda expression
+ * Leaves the label on the data stack.
+ */
+static void gen_lambda(Gen *g, const AstExpression *e) {
+    char *label = xfmt("$lambda$%u", ++g->lambdas);
+    const AstType *ft = e->evaluated_type;
+    int rk = (ft && ft->kind == AST_TYPE_FUNCTION) ? kind_of(ft->function.result) : K_NONE;
+    const AstParameterList *pl = &e->data.lambda.parameters;
+    gen_callable(g, label, "lambda", pl->items, pl->count, NULL, e->data.lambda.inside, rk);
+    emit(g, "PUSHS string@%s", label);
+    free(label);
+}
+
+/**
+ * Generate an interpolated string: texts as constants, expressions via toStr, concatenated.
+ * @param g  generator
+ * @param e  interpolated string expression
+ * Leaves one String on the data stack.
+ */
+static void gen_interpolated(Gen *g, const AstExpression *e) {
+    const AstStringPart *items = e->data.interpolated_string.items;
+    size_t n = e->data.interpolated_string.count;
+    if (n == 0) {
+        emit(g, "PUSHS string@");
+        return;
+    }
+    for (size_t i = 0; i < n; i++) {
+        if (i > 0) {
+            g->ctx->pending++; /* current result lies on the stack */
+        }
+        if (items[i].kind == AST_STRING_TEXT) {
+            Buf b = {0};
+            put_string_const(&b, items[i].data.text.data, items[i].data.text.length);
+            emit(g, "PUSHS %s", b.data);
+            free(b.data);
+        } else {
+            const AstExpression *pe = items[i].data.expression;
+            gen_expr(g, pe);
+            if (kind_of(expr_type(g, pe)) != AST_TYPE_STRING) {
+                call_builtin(g, BI_TO_STR);
+            }
+        }
+        if (i > 0) {
+            g->ctx->pending--;
+            concat_top(g);
+        }
+    }
+}
+
+/**
+ * Generate any expression (dispatch on its kind).
+ * @param g  generator
+ * @param e  expression
+ * Leaves exactly one value on the data stack.
+ */
+static void gen_expr(Gen *g, const AstExpression *e) {
+    if (g->error) {
+        return;
+    }
+    switch (e->kind) {
+    case AST_EXPR_INT:
+        emit(g, "PUSHS int@%d", (int)e->data.int_value);
+        break;
+    case AST_EXPR_DOUBLE:
+        emit(g, "PUSHS float@%a", e->data.double_value);
+        break;
+    case AST_EXPR_STRING: {
+        Buf b = {0};
+        put_string_const(&b, e->data.string_value.data, e->data.string_value.length);
+        emit(g, "PUSHS %s", b.data);
+        free(b.data);
+        break;
+    }
+    case AST_EXPR_BOOLEAN:
+        emit(g, "PUSHS bool@%s", e->data.boolean_value ? "true" : "false");
+        break;
+    case AST_EXPR_UNIT:
+        emit(g, "PUSHS nil@nil"); /* value () is nil in IFJcode26 */
+        break;
+    case AST_EXPR_NAME:
+        gen_name(g, e);
+        break;
+    case AST_EXPR_BINARY:
+        gen_binary(g, e);
+        break;
+    case AST_EXPR_UNARY:
+        gen_unary(g, e);
+        break;
+    case AST_EXPR_CALL:
+        gen_call(g, e);
+        break;
+    case AST_EXPR_MEMBER:
+        gen_member(g, e, NULL);
+        break;
+    case AST_EXPR_IF:
+        gen_conditional(g, e, true);
+        break;
+    case AST_EXPR_LAMBDA:
+        gen_lambda(g, e);
+        break;
+    case AST_EXPR_INTERPOLATED_STRING:
+        gen_interpolated(g, e);
+        break;
+    }
 }
