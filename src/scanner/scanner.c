@@ -376,6 +376,17 @@ static ErrorCode _read_istring_text(Scanner *scanner, Token *token) {
         return _make_token(token, TOKEN_ISTRING_END);
     }
 
+    // '${' starts an expression, its tokens are read as normal until '}'
+    if (scanner->current == '$' && scanner->next == '{') {
+        _next_char(scanner);
+        _next_char(scanner);
+        ErrorCode result = _push_istring_mode(scanner, ISTRING_MODE_EXPR);
+        if (result != ERR_OK) {
+            return result;
+        }
+        return _make_token(token, TOKEN_ISTRING_EXPR_BEGIN);
+    }
+
     // $name is the value of the variable
     if (scanner->current == '$' && (isalpha(scanner->next) || scanner->next == '_')) {
         _next_char(scanner);
@@ -393,7 +404,6 @@ static ErrorCode _read_istring_text(Scanner *scanner, Token *token) {
         return _copy_buffer(scanner, token);
     }
 
-    // for the time being ${..} is not recognised
     // A standalone $ must be followed by a variable name or '{'
     if (scanner->current == '$' && scanner->next != '$') {
         return _token_error(token, "invalid use of '$' in interpolated string");
@@ -779,6 +789,16 @@ static ErrorCode _read_token(Scanner *scanner, Token *token) {
     case '"':
         return _read_string(scanner, token);
 
+    // '}' ends the expression of istring
+    case '}':
+        if (scanner->istring_depth > 0 &&
+            scanner->istring_modes[scanner->istring_depth - 1] == ISTRING_MODE_EXPR) {
+            _next_char(scanner);
+            scanner->istring_depth--;
+            return _make_token(token, TOKEN_ISTRING_EXPR_END);
+        }
+        return _lexical_error(scanner);
+
     default:
         // No other token can start with any other character
         return _lexical_error(scanner);
@@ -837,6 +857,11 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
                 return result;
             }
 
+            // An expression inside an istring must be in one line
+            if (had_newline && scanner->istring_depth > 0) {
+                return _token_error(token, "line break inside interpolated string expression");
+            }
+
             // A comment with a line break inside acts as EOL
             if (had_newline) {
                 scanner->after_comment = true;
@@ -852,6 +877,13 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
 
         if (scanner->current != '\n') {
             break;
+        }
+
+        // An expression inside istring must fit in one line
+        if (scanner->istring_depth > 0) {
+            token->line = scanner->line;
+            token->column = scanner->column;
+            return _token_error(token, "line break inside interpolated string expression");
         }
 
         // If the line had a token, put and EOL token at the line break
@@ -885,6 +917,10 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
 
     // End of the input, every next call returns TOKEN_EOF
     if (scanner->current == EOF) {
+
+        if (scanner->istring_depth > 0) {
+            return _token_error(token, "unterminated interpolated string literal");
+        }
         // If the last line has no line break at the end, but it still needs EOL before EOF
         if (scanner->line_has_token) {
             scanner->line_has_token = false;
