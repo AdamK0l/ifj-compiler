@@ -1697,3 +1697,82 @@ static void gen_function(Gen *g, const AstFunction *f, const char *label, const 
     gen_callable(g, label, f->name, ps, n, recv, f->inside, kind_of(f->return_type));
     free(ps);
 }
+
+/* ------------------------------------------------------------ whole program */
+
+/**
+ * Generate the whole IFJcode26 program (header, entry point, functions, used built-ins).
+ * Nothing is written to out on error.
+ * @param program  AST after semantic analysis
+ * @param out      output file
+ * @return         0 on success, 99 on an inconsistent AST
+ */
+int codegen_program(const AstProgram *program, FILE *out) {
+    Gen g = {0};
+    g.prog = program;
+
+    /* 1) table of functions and extension methods (can be called before definition) */
+    const AstFunction *main_fn = NULL;
+    for (size_t i = 0; i < program->count; i++) {
+        const AstDefinition *d = &program->items[i];
+        if (d->kind == AST_DEF_FUNCTION) {
+            g.fi = xrealloc(g.fi, (g.nfi + 1) * sizeof *g.fi);
+            g.fi[g.nfi++] = (FuncInfo){d->data.function, xfmt("$fn$%s", d->data.function->name)};
+            if (d->data.function->is_main) {
+                if (main_fn != NULL) {
+                    fail_at(&g, d->data.function->pos, "multiple functions with @main");
+                }
+                main_fn = d->data.function;
+            }
+        } else {
+            const AstExtension *x = d->data.extension;
+            for (size_t j = 0; j < x->method_count; j++) {
+                g.xi = xrealloc(g.xi, (g.nxi + 1) * sizeof *g.xi);
+                g.xi[g.nxi++] = (ExtInfo){
+                    x, x->methods[j],
+                    xfmt("$ext$%s$%s", kind_name(kind_of(x->receiver.type)), x->methods[j]->name)};
+            }
+        }
+    }
+    if (main_fn == NULL) {
+        position p = {0, 0};
+        fail_at(&g, p, "missing function with @main");
+    }
+
+    /* 2) functions and methods */
+    for (size_t i = 0; i < g.nfi && !g.error; i++) {
+        gen_function(&g, g.fi[i].fn, g.fi[i].label, NULL);
+    }
+    for (size_t i = 0; i < g.nxi && !g.error; i++) {
+        gen_function(&g, g.xi[i].fn, g.xi[i].label, &g.xi[i].ext->receiver);
+    }
+
+    /* 3) assembly of the output: header, entry point, functions, built-in functions */
+    int rc = g.error;
+    if (rc == 0) {
+        Buf o = {0};
+        buf_puts(&o, ".IFJcode26\n");
+        buf_puts(&o, "DEFVAR " T1 "\nDEFVAR " T2 "\nDEFVAR " T3 "\nDEFVAR " T4 "\nDEFVAR " DISCARD "\n");
+        buf_puts(&o, "CREATEFRAME\n");
+        buf_printf(&o, "CALL $fn$%s\nEXIT int@0\n", main_fn->name);
+        buf_puts(&o, g.funcs.data ? g.funcs.data : "");
+        for (int b = 0; b < BI_COUNT; b++) {
+            if (g.builtin_used[b]) {
+                buf_puts(&o, BUILTINS[b].code);
+            }
+        }
+        fputs(o.data, out);
+        free(o.data);
+    }
+
+    for (size_t i = 0; i < g.nfi; i++) {
+        free(g.fi[i].label);
+    }
+    for (size_t i = 0; i < g.nxi; i++) {
+        free(g.xi[i].label);
+    }
+    free(g.fi);
+    free(g.xi);
+    free(g.funcs.data);
+    return rc;
+}
