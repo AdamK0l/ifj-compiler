@@ -243,10 +243,29 @@ static ErrorCode _read_number(Scanner *scanner, Token *token) {
         return result;
     }
 
-    // for the time being doubles are not recognised
-    // The text of the number is converted to long long on base 10
-    token->type = TOKEN_INT_LITERAL;
-    token->int_value = strtoll(scanner->buffer.data, NULL, 10);
+    bool is_double = false;
+    if (scanner->current == '.' && isdigit(scanner->next)) {
+        is_double = true;
+        result = _add_char(scanner);
+        if (result != ERR_OK) {
+            return result;
+        }
+
+        result = _read_digits(scanner, token);
+        if (result != ERR_OK) {
+            return result;
+        }
+    }
+
+    // for the time being exponent and the d suffix are not recognised
+    // The text of the number is converted into its value
+    if (is_double) {
+        token->type = TOKEN_DOUBLE_LITERAL;
+        token->double_value = strtod(scanner->buffer.data, NULL);
+    } else {
+        token->type = TOKEN_INT_LITERAL;
+        token->int_value = strtoll(scanner->buffer.data, NULL, 10);
+    }
     return ERR_OK;
 }
 
