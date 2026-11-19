@@ -528,3 +528,249 @@ static const Builtin BUILTINS[BI_COUNT] = {
                   "POPFRAME\n"
                   "RETURN\n"},
 };
+
+/**
+ * Find a built-in function by name (floor is only a member).
+ * @param name  function name
+ * @return      index into BUILTINS, or -1
+ */
+static int builtin_find(const char *name) {
+    for (int i = 0; i < BI_COUNT; i++) {
+        if (i != BI_FLOOR && strcmp(BUILTINS[i].name, name) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+/* ------------------------------------------------------------ generator state */
+
+typedef struct {
+    const char *name;    /* name in the source (belongs to AST) */
+    char *mangled;       /* name in IFJcode26 (belongs to Ctx.locals) */
+    const AstType *type; /* type of the variable */
+} Var;
+
+typedef struct {
+    Var *v;
+    size_t n;
+    size_t cap;
+} Scope;
+
+/* Context of the currently generated function (lambda has its own). */
+typedef struct {
+    Buf body;
+    char **locals; /* mangled names for DEFVAR */
+    size_t nlocals, cap_locals;
+    Scope *scopes;
+    size_t nscopes, cap_scopes;
+    const char *end_label; /* sem skáče return */
+    int pending;           /* values of partially evaluated expressions on the stack */
+    int ret_kind;          /* declared return type or K_NONE */
+} Ctx;
+
+typedef struct {
+    const AstFunction *fn;
+    char *label;
+} FuncInfo;
+
+typedef struct {
+    const AstExtension *ext;
+    const AstFunction *fn;
+    char *label;
+} ExtInfo;
+
+typedef struct {
+    Buf funcs; /* complete functions */
+    const AstProgram *prog;
+    FuncInfo *fi;
+    size_t nfi;
+    ExtInfo *xi;
+    size_t nxi;
+    bool builtin_used[BI_COUNT];
+    unsigned labels, uid, lambdas;
+    Ctx *ctx;
+    int error;
+} Gen;
+
+/**
+ * Record the first internal error: print it with the position to stderr, set g->error to 99.
+ * @param g    generator
+ * @param pos  source position
+ * @param fmt  printf format of the message
+ */
+static void fail_at(Gen *g, position pos, const char *fmt, ...) {
+    if (g->error == 0) {
+        va_list ap;
+        fprintf(stderr, "codegen: %zu:%zu: ", pos.line, pos.column);
+        va_start(ap, fmt);
+        vfprintf(stderr, fmt, ap);
+        va_end(ap);
+        fputc('\n', stderr);
+        g->error = ERR_INTERNAL;
+    }
+}
+
+/**
+ * Append one instruction line to the curent function body.
+ * @param g    generator
+ * @param fmt  printf format of the line
+ */
+#if defined(__GNUC__)
+__attribute__((format(printf, 2, 3)))
+#endif
+static void emit(Gen *g, const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    buf_vprintf(&g->ctx->body, fmt, ap);
+    va_end(ap);
+    buf_puts(&g->ctx->body, "\n");
+}
+
+/**
+ * Emit a "# text name" comment line (only if CODEGEN_COMMENTS is on).
+ * @param g     generator
+ * @param text  comment text
+ * @param name  name added to the comment
+ */
+static void note(Gen *g, const char *text, const char *name) {
+#if CODEGEN_COMMENTS
+    emit(g, "# %s %s", text, name);
+#else
+    (void)g;
+    (void)text;
+    (void)name;
+#endif
+}
+
+/**
+ * Get a fresh label number (labels are $L<number>).
+ * @param g  generator
+ * @return   unique number
+ */
+static unsigned new_label(Gen *g) {
+    return g->labels++;
+}
+
+/* ---- variable scopes ---- */
+
+/**
+ * Open a new innermost variable scope.
+ * @param g  generator
+ */
+static void scope_push(Gen *g) {
+    Ctx *c = g->ctx;
+    if (c->nscopes == c->cap_scopes) {
+        c->cap_scopes = c->cap_scopes ? c->cap_scopes * 2 : 4;
+        c->scopes = xrealloc(c->scopes, c->cap_scopes * sizeof *c->scopes);
+    }
+    c->scopes[c->nscopes++] = (Scope){0};
+}
+
+/**
+ * Close the innermost variable scope.
+ * @param g  generator
+ */
+static void scope_pop(Gen *g) {
+    Ctx *c = g->ctx;
+    free(c->scopes[--c->nscopes].v);
+}
+
+/**
+ * Register a local name so its DEFVAR is emitted at the function start.
+ * @param g        generator
+ * @param mangled  heap name, ownership passes to the context
+ * @return         the same pointer
+ */
+static char *ctx_add_local(Gen *g, char *mangled) {
+    Ctx *c = g->ctx;
+    if (c->nlocals == c->cap_locals) {
+        c->cap_locals = c->cap_locals ? c->cap_locals * 2 : 16;
+        c->locals = xrealloc(c->locals, c->cap_locals * sizeof *c->locals);
+    }
+    c->locals[c->nlocals++] = mangled;
+    return mangled;
+}
+
+/**
+ * Create a helper local variable named $<prefix><uid>.
+ * @param g       generator
+ * @param prefix  name prefix
+ * @return        variable name (owned by the context)
+ */
+static char *ctx_temp(Gen *g, const char *prefix) {
+    return ctx_add_local(g, xfmt("$%s%u", prefix, ++g->uid));
+}
+
+/**
+ * Declare a variable in the innermost scope under a unique name <name>$<uid>.
+ * @param g     generator
+ * @param name  source name
+ * @param type  variable type
+ * @return      name used in the generated code
+ */
+static const char *scope_declare(Gen *g, const char *name, const AstType *type) {
+    Ctx *c = g->ctx;
+    Scope *s = &c->scopes[c->nscopes - 1];
+    if (s->n == s->cap) {
+        s->cap = s->cap ? s->cap * 2 : 4;
+        s->v = xrealloc(s->v, s->cap * sizeof *s->v);
+    }
+    char *m = ctx_add_local(g, xfmt("%s$%u", name, ++g->uid));
+    s->v[s->n++] = (Var){name, m, type};
+    return m;
+}
+
+/**
+ * Find a variable, innermost scope first.
+ * @param g     generator
+ * @param name  source name
+ * @return      the variable, or NULL
+ */
+static const Var *scope_lookup(Gen *g, const char *name) {
+    Ctx *c = g->ctx;
+    for (size_t i = c->nscopes; i > 0; i--) {
+        const Scope *s = &c->scopes[i - 1];
+        for (size_t j = s->n; j > 0; j--) {
+            if (strcmp(s->v[j - 1].name, name) == 0) {
+                return &s->v[j - 1];
+            }
+        }
+    }
+    return NULL;
+}
+
+/* ---- function tables ---- */
+
+/**
+ * Find a top-level function by name.
+ * @param g     generator
+ * @param name  function name
+ * @return      table entry, or NULL
+ */
+static const FuncInfo *find_func(Gen *g, const char *name) {
+    for (size_t i = 0; i < g->nfi; i++) {
+        if (strcmp(g->fi[i].fn->name, name) == 0) {
+            return &g->fi[i];
+        }
+    }
+    return NULL;
+}
+
+/**
+ * Find an extension method by receiver type and name.
+ * @param g     generator
+ * @param recv  receiver type
+ * @param name  method name
+ * @return      table entry, or NULL
+ */
+static const ExtInfo *find_ext(Gen *g, const AstType *recv, const char *name) {
+    for (size_t i = 0; i < g->nxi; i++) {
+        const ExtInfo *x = &g->xi[i];
+        if (strcmp(x->fn->name, name) == 0 && type_equal(x->ext->receiver.type, recv)) {
+            return x;
+        }
+    }
+    return NULL;
+}
+
