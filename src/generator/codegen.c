@@ -1320,3 +1320,71 @@ static void gen_expr(Gen *g, const AstExpression *e) {
         break;
     }
 }
+
+/* ------------------------------------------------------------ commands */
+
+/**
+ * Generate a condition and jump to $L<label> if it is false.
+ * @param g      generator
+ * @param cond   Boolean expression
+ * @param label  label number
+ */
+static void gen_jump_if_false(Gen *g, const AstExpression *cond, unsigned label) {
+    gen_expr(g, cond);
+    emit(g, "PUSHS bool@false");
+    emit(g, "JUMPIFEQS $L%u", label);
+}
+
+/**
+ * Generate if statement or if expression.
+ * @param g           generator
+ * @param e           AST_EXPR_IF expression
+ * @param want_value  true: leave one value (missing else gives ()); false: leave nothing
+ */
+static void gen_conditional(Gen *g, const AstExpression *e, bool want_value) {
+    int tk = want_value ? kind_of(expr_type(g, e)) : K_NONE;
+    unsigned l_else = new_label(g), l_end = new_label(g);
+    gen_jump_if_false(g, e->data.conditional.condition, l_else);
+    gen_block(g, e->data.conditional.then_branch, want_value, tk);
+    if (e->data.conditional.else_branch != NULL) {
+        emit(g, "JUMP $L%u", l_end);
+        emit(g, "LABEL $L%u", l_else);
+        gen_block(g, e->data.conditional.else_branch, want_value, tk);
+        emit(g, "LABEL $L%u", l_end);
+    } else if (want_value) { /* if but else has value () */
+        emit(g, "JUMP $L%u", l_end);
+        emit(g, "LABEL $L%u", l_else);
+        emit(g, "PUSHS nil@nil");
+        emit(g, "LABEL $L%u", l_end);
+    } else {
+        emit(g, "LABEL $L%u", l_else);
+    }
+}
+
+/**
+ * Generate return: convert or drop the value, clean half-evaluated values off the stack, jump to the end label.
+ * @param g         generator
+ * @param s         return statement (value may be NULL)
+ * @param ret_kind  declared result kind, or K_NONE
+ */
+static void gen_return(Gen *g, const AstStatement *s, int ret_kind) {
+    const AstExpression *v = s->data.return_value;
+    if (v == NULL) {
+        emit(g, "PUSHS nil@nil");
+    } else if (ret_kind == AST_TYPE_UNIT) { /* value is evaluated and discarded */
+        gen_expr(g, v);
+        emit(g, "POPS " DISCARD);
+        emit(g, "PUSHS nil@nil");
+    } else {
+        gen_expr_as(g, v, ret_kind);
+    }
+    /* return inside an expression being evaluated: leftover values remain below the result */
+    if (g->ctx->pending > 0) {
+        emit(g, "POPS " T1);
+        for (int i = 0; i < g->ctx->pending; i++) {
+            emit(g, "POPS " DISCARD);
+        }
+        emit(g, "PUSHS " T1);
+    }
+    emit(g, "JUMP %s", g->ctx->end_label);
+}
