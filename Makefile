@@ -85,6 +85,7 @@ pack: clean
 	$(MAKE) -C $(PACK_DIR) clean
 	@# 4. Create ZIP archive
 	@echo "==> Creating ZIP archive..."
+	find $(PACK_DIR) -name '.*' -delete
 	cd $(PACK_DIR) && zip -r ../$(ARCHIVE) .
 	rm -rf $(PACK_DIR)
 	@# 5. Run official submission check script if present
