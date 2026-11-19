@@ -208,6 +208,31 @@ static ErrorCode _read_identifier(Scanner *scanner, Token *token) {
     return _copy_buffer(scanner, token);
 }
 
+// Reads string literal
+static ErrorCode _read_string(Scanner *scanner, Token *token) {
+    // Skips the first '"', text of the string is collected into the buffer
+    _next_char(scanner);
+    dstring_clear(&scanner->buffer);
+
+    while (scanner->current != '"') {
+        // A string literal must end in the same line as it started
+        if (scanner->current == '\n' || scanner->current == EOF) {
+            return _token_error(token, "unterminated string literal");
+        }
+
+        // for the time being escape sequences are not handled
+        ErrorCode result = _add_char(scanner);
+        if (result != ERR_OK) {
+            return result;
+        }
+    }
+
+    // Skips the last '"', the token gets the copy of the string
+    _next_char(scanner);
+    token->type = TOKEN_STRING_LITERAL;
+    return _copy_buffer(scanner, token);
+}
+
 // Reads digit into buffer, '_' between digits is skipped
 static ErrorCode _read_digits(Scanner *scanner, Token *token) {
     while (isdigit(scanner->current) || scanner->current == '_') {
@@ -551,8 +576,12 @@ static ErrorCode _read_token(Scanner *scanner, Token *token) {
         _next_char(scanner);
         return _read_main(scanner, token);
 
+    // for the time being multiple line string are not recognised
+    case '"':
+        return _read_string(scanner, token);
+
     default:
-        // for the time being strings are not recognised.
+        // No other token can start with any other character
         return _lexical_error(scanner);
     }
 }
