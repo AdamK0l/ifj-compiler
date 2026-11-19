@@ -31,6 +31,7 @@ typedef struct {
     bool at_line_start;   // True, if no token was read on the current line
     bool tab_in_indent;   // True, if there was a tab before the first token on the line
     int line_indent;      // Spaces at the start of the line, default -1
+    bool after_comment;   // True, if a comment ended with line break on this line
 } Scanner;
 
 // Initialises the scanner to read from input, returns ERR_OK or ERR_INTERNAL

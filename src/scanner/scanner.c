@@ -351,6 +351,7 @@ ErrorCode scanner_init(Scanner *scanner, FILE *input) {
     scanner->at_line_start = true;
     scanner->tab_in_indent = false;
     scanner->line_indent = -1;
+    scanner->after_comment = false;
 
     // Initialise lexem buffer, internal error if it fails
     if (!dstring_init(&scanner->buffer)) {
@@ -539,7 +540,17 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
             if (result != ERR_OK) {
                 return result;
             }
-            // for the time being a line break inside a comment is whitespace
+
+            // A comment with a line break inside acts as EOL
+            if (had_newline) {
+                scanner->after_comment = true;
+                scanner->newline_seen = true;
+                if (scanner->line_has_token && scanner->parenth_depth == 0) {
+                    scanner->line_has_token = false;
+                    scanner->indent_checked = false;
+                    return _make_token(token, TOKEN_EOL);
+                }
+            }
             continue;
         }
 
@@ -559,6 +570,7 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
             scanner->at_line_start = true;
             scanner->tab_in_indent = false;
             scanner->line_indent = -1;
+            scanner->after_comment = false;
             return _make_token(token, TOKEN_EOL);
         }
 
@@ -568,6 +580,7 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
         scanner->at_line_start = true;
         scanner->tab_in_indent = false;
         scanner->line_indent = -1;
+        scanner->after_comment = false;
     }
 
     // The token starts at the current character
@@ -590,6 +603,11 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
 
         token->type = TOKEN_EOF;
         return ERR_OK;
+    }
+
+    // After a comment with line break, the rest of the line cannot have a token
+    if (scanner->after_comment) {
+        return _token_error(token, "token after a multi-line comment on the same line");
     }
 
     // Tab is the first token in line and line is not empty
