@@ -200,11 +200,16 @@ static bool _in_isting_text(const Scanner *scanner) {
 
 // Starts an istring
 static ErrorCode _start_istring(Scanner *scanner, Token *token) {
-    // Skips the opening "
+    // Skips the opening ", two more quotes mean a multiline istring (s"" is an empty string)
     _next_char(scanner);
+    IStringMode mode = ISTRING_MODE_TEXT;
+    if (scanner->current == '"' && scanner->next == '"') {
+        _next_char(scanner);
+        _next_char(scanner);
+        mode = ISTRING_MODE_MULTILINE;
+    }
 
-    // for the time being multiline istring is not recognised
-    ErrorCode result = _push_istring_mode(scanner, ISTRING_MODE_TEXT);
+    ErrorCode result = _push_istring_mode(scanner, mode);
     if (result != ERR_OK) {
         return result;
     }
@@ -369,8 +374,10 @@ static ErrorCode _read_string(Scanner *scanner, Token *token) {
 
 // Reads the next part of the istring
 static ErrorCode _read_istring_text(Scanner *scanner, Token *token) {
+    bool multiline = scanner->istring_modes[scanner->istring_depth - 1] == ISTRING_MODE_MULTILINE;
+
     // The closing " ends the istring
-    if (scanner->current == '"') {
+    if (scanner->current == '"' && !multiline) {
         _next_char(scanner);
         scanner->istring_depth--;
         return _make_token(token, TOKEN_ISTRING_END);
@@ -411,9 +418,46 @@ static ErrorCode _read_istring_text(Scanner *scanner, Token *token) {
 
     // The text until the next $ or closing " is ISTRING_PART
     dstring_clear(&scanner->buffer);
-    while (scanner->current != '"') {
-        if (scanner->current == '\n' || scanner->current == EOF) {
-            return _token_error(token, "undetermined interpolated string literal");
+    while (true) {
+        if (scanner->current == EOF) {
+            return _token_error(token, "unterminated interpolated string literal");
+        }
+
+        // In a multiline istring quotes are counted like a normal multiline string
+        if (scanner->current == '"' && multiline) {
+            int quotes = 0;
+            while (scanner->current == '"') {
+                quotes++;
+                _next_char(scanner);
+            }
+
+            // The last 3 quotes close the string, the extra ones before are text
+            int text_quotes = quotes;
+            if (quotes >= 3) {
+                text_quotes = quotes - 3;
+            }
+            for (int i = 0; i < text_quotes; i++) {
+                if (!dstring_append_char(&scanner->buffer, '"')) {
+                    error_print_no_pos(ERR_INTERNAL, "out of memory");
+                    return ERR_INTERNAL;
+                }
+            }
+
+            // ISTRING_END comes on next call after the last ISTRING_PART
+            if (quotes >= 3) {
+                scanner->istring_depth--;
+                scanner->istring_end_pending = true;
+                break;
+            }
+            continue;
+        }
+
+        // A single-line string ends with " and ends on same line
+        if (scanner->current == '"' && !multiline) {
+            break;
+        }
+        if (scanner->current == '\n' && !multiline) {
+            return _token_error(token, "unterminated interpolated string literal");
         }
 
         // "$$" is one '$', any other $ starts a value
@@ -423,9 +467,10 @@ static ErrorCode _read_istring_text(Scanner *scanner, Token *token) {
             }
             _next_char(scanner);
         }
+
         //  Escape sequences are decoded like in a normal string
         ErrorCode result;
-        if (scanner->current == '\\') {
+        if (scanner->current == '\\' && !multiline) {
             result = _read_escape(scanner, token);
         } else {
             result = _add_char(scanner);
@@ -434,6 +479,12 @@ static ErrorCode _read_istring_text(Scanner *scanner, Token *token) {
         if (result != ERR_OK) {
             return result;
         }
+    }
+
+    // The closing quotes came right away, so no text before ISTRING_END
+    if (scanner->buffer.length == 0) {
+        scanner->istring_end_pending = false;
+        return _make_token(token, TOKEN_ISTRING_END);
     }
 
     token->type = TOKEN_ISTRING_PART;
@@ -816,6 +867,14 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
         token->line = scanner->line;
         token->column = scanner->column;
         return _make_token(token, TOKEN_DEDENT);
+    }
+
+    // Closing """ was already read in the last ISTRING_PART
+    if (scanner->istring_end_pending) {
+        scanner->istring_end_pending = false;
+        token->line = scanner->line;
+        token->column = scanner->column;
+        return _make_token(token, TOKEN_ISTRING_END);
     }
 
     // Inside the istring everything is read as is
