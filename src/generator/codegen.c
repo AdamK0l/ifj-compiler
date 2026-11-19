@@ -839,3 +839,203 @@ static const AstType *expr_type(Gen *g, const AstExpression *e) {
         return NULL;
     }
 }
+
+/* ------------------------------------------------------------ expressions */
+
+static void gen_expr(Gen *g, const AstExpression *e);
+static void gen_block(Gen *g, const AstBLOCK *b, bool want_value, int target);
+static void gen_conditional(Gen *g, const AstExpression *e, bool want_value);
+
+/**
+ * Generate an expression; convert Int to Double (INT2FLOATS) if target is Double.
+ * @param g       generator
+ * @param e       expression
+ * @param target  wanted AstTypeKind, or K_NONE
+ * Leaves one value on the data stack.
+ */
+static void gen_expr_as(Gen *g, const AstExpression *e, int target) {
+    gen_expr(g, e);
+    if (target == AST_TYPE_DOUBLE) {
+        int k = kind_of(expr_type(g, e));
+        if (k == K_NONE) {
+            fail_at(g, e->pos, "Expression has no evaluated_type (needed for conversion to Double)");
+        } else if (k == AST_TYPE_INT) {
+            emit(g, "INT2FLOATS");
+        }
+    }
+}
+
+/**
+ * Call a built-in (arguments already on the stack) and mark it as used.
+ * @param g   generator
+ * @param id  BI_* index
+ * Result is left on the data stack.
+ */
+static void call_builtin(Gen *g, int id) {
+    g->builtin_used[id] = true;
+    emit(g, "CREATEFRAME");
+    emit(g, "CALL $ifj$%s", BUILTINS[id].name);
+}
+
+/**
+ * Concatenate the two top strings: ... a b -> ... a+b.
+ * @param g  generator
+ */
+static void concat_top(Gen *g) {
+    emit(g, "POPS " T2);
+    emit(g, "POPS " T1);
+    emit(g, "CONCAT " T3 " " T1 " " T2);
+    emit(g, "PUSHS " T3);
+}
+
+/**
+ * Generate short-circuit && and ||.
+ * @param g  generator
+ * @param e  binary expression with AST_AND or AST_OR
+ * Leaves one Boolean on the data stack.
+ */
+static void gen_logic(Gen *g, const AstExpression *e) {
+    bool is_and = e->data.binary.op == AST_AND;
+    unsigned l_short = new_label(g), l_end = new_label(g);
+    gen_expr(g, e->data.binary.left);
+    emit(g, "PUSHS bool@%s", is_and ? "false" : "true");
+    emit(g, "JUMPIFEQS $L%u", l_short);
+    gen_expr(g, e->data.binary.right);
+    emit(g, "JUMP $L%u", l_end);
+    emit(g, "LABEL $L%u", l_short);
+    emit(g, "PUSHS bool@%s", is_and ? "false" : "true");
+    emit(g, "LABEL $L%u", l_end);
+}
+
+/**
+ * Generate a binary operator (Int/Double conversion, IDIV rounds to zero, String +).
+ * @param g  generator
+ * @param e  binary expression
+ * Leaves one value on the data stack.
+ */
+static void gen_binary(Gen *g, const AstExpression *e) {
+    AstBinaryOp op = e->data.binary.op;
+    const AstExpression *l = e->data.binary.left;
+    const AstExpression *r = e->data.binary.right;
+    if (op == AST_AND || op == AST_OR) {
+        gen_logic(g, e);
+        return;
+    }
+    int lk = kind_of(expr_type(g, l)), rk = kind_of(expr_type(g, r));
+    if (lk == K_NONE || rk == K_NONE) {
+        fail_at(g, e->pos, "operand binary expression has no evaluated_type");
+        return;
+    }
+    
+    int t = (lk == AST_TYPE_DOUBLE || rk == AST_TYPE_DOUBLE) ? AST_TYPE_DOUBLE : lk;
+    gen_expr_as(g, l, t);
+    g->ctx->pending++;
+    gen_expr_as(g, r, t);
+    g->ctx->pending--;
+
+    switch (op) {
+    case AST_ADD:
+        if (t == AST_TYPE_STRING) {
+            concat_top(g);
+        } else {
+            emit(g, "ADDS");
+        }
+        break;
+    case AST_SUBTRACT:
+        emit(g, "SUBS");
+        break;
+    case AST_MULTIPLY:
+        emit(g, "MULS");
+        break;
+    case AST_DIVIDE:
+        emit(g, t == AST_TYPE_DOUBLE ? "DIVS" : "IDIVS"); /* IDIVS zaokrouhluje k nule */
+        break;
+    case AST_LESS:
+        emit(g, "LTS");
+        break;
+    case AST_GREATER:
+        emit(g, "GTS");
+        break;
+    case AST_EQUAL:
+        emit(g, "EQS");
+        break;
+    case AST_NOT_EQUAL:
+        emit(g, "EQS");
+        emit(g, "NOTS");
+        break;
+    case AST_LESS_EQUAL:
+    case AST_GREATER_EQUAL: /* a <= b je (a < b) nebo (a == b) */
+        emit(g, "POPS " T2);
+        emit(g, "POPS " T1);
+        emit(g, "%s " T3 " " T1 " " T2, op == AST_LESS_EQUAL ? "LT" : "GT");
+        emit(g, "EQ " T4 " " T1 " " T2);
+        emit(g, "OR " T3 " " T3 " " T4);
+        emit(g, "PUSHS " T3);
+        break;
+    default:
+        fail_at(g, e->pos, "unknown binary operator");
+    }
+}
+
+/**
+ * Generate unary +, - and !.
+ * @param g  generator
+ * @param e  unary expression
+ * Leaves one value on the data stack.
+ */
+static void gen_unary(Gen *g, const AstExpression *e) {
+    const AstExpression *o = e->data.unary.operand;
+    gen_expr(g, o);
+    if (e->data.unary.op == AST_UNARY_NOT) {
+        emit(g, "NOTS");
+    } else if (e->data.unary.op == AST_UNARY_MINUS) {
+        int k = kind_of(expr_type(g, o));
+        if (k == K_NONE) {
+            fail_at(g, e->pos, "Unary minus operand missing evaluated_type");
+            return;
+        }
+        emit(g, k == AST_TYPE_DOUBLE ? "PUSHS float@-0x1p+0" : "PUSHS int@-1");
+        emit(g, "MULS");
+    }
+}
+
+/**
+ * Generate a call of a known function: push arguments left to right, CREATEFRAME, CALL.
+ * @param g      generator
+ * @param pos    position for diagnostics
+ * @param label  callee label
+ * @param recv   receiver of an extension method, or NULL
+ * @param pls    parameter lists of the callee
+ * @param al     argument lists of the call
+ * Leaves the result on the data stack.
+ */
+static void gen_direct(Gen *g, position pos, const char *label, const AstExpression *recv,
+                       const AstParameterLists *pls, const AstArgumentList *al) {
+    size_t total = 0;
+    size_t have = al ? al->count : 0;
+    if (have < pls->count) {
+        fail_at(g, pos, "call has fewer argument lists than definition");
+        return;
+    }
+    if (recv) {
+        gen_expr(g, recv);
+        g->ctx->pending++;
+        total++;
+    }
+    for (size_t k = 0; k < pls->count; k++) {
+        const AstParameterList *pl = &pls->items[k];
+        const AstExpressionList *args = &al->items[k];
+        if (pl->count != args->count) {
+            fail_at(g, pos, "argument counts do not match");
+            break;
+        }
+        for (size_t i = 0; i < pl->count; i++) {
+            gen_expr_as(g, args->items[i], kind_of(pl->items[i].type));
+            g->ctx->pending++;
+            total++;
+        }
+    }
+    g->ctx->pending -= (int)total;
+    emit(g, "CREATEFRAME");
+    emit(g, "CALL %s", label);
+}
