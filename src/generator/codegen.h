@@ -1,6 +1,6 @@
 /*
- * Projekt IFJ26 - překladač jazyka IFJ26 do IFJcode26
- * codegen.h - generátor cílového kódu IFJcode26 z AST
+ * Projekt IFJ26 - IFJ26/IAL compiler to IFJcode26
+ * codegen.h - generator final code IFJcode26 from AST
  *
  * Autoři: <Jiří Janásek, xjanasj00>
  *
