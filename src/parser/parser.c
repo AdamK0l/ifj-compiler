@@ -160,7 +160,12 @@ bool parse_function(Parser *p){
 
     if(!parser_expect(p, TOKEN_LEFT_PAREN, "'('")) return false;
 
-    if(!parse_parameters(p)) return false;
+    AstParameterList params = {.items = NULL, .count = 0, .capacity = 0};
+    if(!parse_parameters(p, &params)){
+        ast_parameter_list_free(&params);
+        return false;
+    }
+    ast_parameter_list_free(&params); // temporary free, TODO: put into function AST node
 
     if(!parser_expect(p, TOKEN_RIGHT_PAREN, "')'")) return false;
 
@@ -177,8 +182,15 @@ bool parse_function(Parser *p){
     return true;
 }
 
-bool parse_parameters(Parser *p){
-    (void)p; return true;
+bool parse_parameters(Parser *p, AstParameterList *list){
+    if(check(p, TOKEN_IDENTIFIER)) {
+        
+        if(!parse_parameter(p, list)) return false;
+        return parse_parameters_next(p, list);
+    } else if(check(p, TOKEN_RIGHT_PAREN)) return true; 
+
+    return syntax_error(p, "'parameter or ')'");
+    
 }
 
 bool parse_opt_main(Parser *p){
@@ -246,4 +258,38 @@ bool parse_opt_type(Parser *p, AstType **out){
 bool parse_block(Parser *p){
     (void)p; return true;
 }
+
+bool parse_parameter(Parser *p, AstParameterList *list){
+    if(!check(p, TOKEN_IDENTIFIER)) return syntax_error(p, "parameter name");
+    position pos = {p->current.line, p->current.column };
+    char *name = take_string(p);
+    advance(p);
+
+    if(!parser_expect(p, TOKEN_COLON, "':'")){
+        free(name);
+        return false;
+    }
+
+    AstType *type = parse_type(p);
+    if(type == NULL){
+        free(name);
+        return false;
+    }
+
+    AstParameter param = {.name = name, .type = type, .pos = pos};
+    ast_parameter_list_push(list, param);
+    return true;
+}
+
+bool parse_parameters_next(Parser *p, AstParameterList *list){
+    if(check(p, TOKEN_COMMA)) {
+        advance(p);
+        if(!parse_parameter(p, list)) return false;
+        return parse_parameters_next(p, list);
+    } else if(check(p, TOKEN_RIGHT_PAREN)) return true; 
+
+    return syntax_error(p, "',' or ')'");
+    
+}
+
 

@@ -12,3 +12,9 @@ echo "ok_prolog (expected 0):"
 
 echo "bad_prolog (expected 2):"
 ./parser_test < tests/bad_prolog.ifj
+
+echo "ok_parameters (expected 0):"
+./parser_test < tests/ok_parameters.ifj
+
+echo "bad_parameters (expected 2):"
+./parser_test < tests/bad_parameters.ifj
