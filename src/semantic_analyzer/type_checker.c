@@ -321,6 +321,57 @@ int check_expression(AstExpression *expr, Symtable *table, AstType **out_type) {
             if (res != ERR_OK) return res;
             break;
 
+        case AST_EXPR_MEMBER: {
+            if (!expr->data.member.receiver) {
+                error_print(ERR_SEM_UNDEFINED, expr->pos, "Member receiver expression is missing");
+                return ERR_SEM_UNDEFINED;
+            }
+
+            AstType *rec_type = NULL;
+            res = check_expression(expr->data.member.receiver, table, &rec_type);
+            if (res != ERR_OK) return res;
+
+            const char *name = expr->data.member.name;
+            if (!name) {
+                error_print(ERR_SEM_UNDEFINED, expr->pos, "Member name is missing");
+                return ERR_SEM_UNDEFINED;
+            }
+
+            if (strcmp(name, "toString") == 0) {
+                *out_type = type_get_string();
+            } else if (strcmp(name, "toInt") == 0) {
+                if (rec_type->kind != AST_TYPE_DOUBLE) {
+                    error_print(ERR_SEM_TYPE, expr->pos,
+                                "Member 'toInt' requires receiver of type Double, but got '%s'",
+                                ast_type_to_string(rec_type->kind));
+                    return ERR_SEM_TYPE;
+                }
+                *out_type = type_get_int();
+            } else if (strcmp(name, "floor") == 0) {
+                if (rec_type->kind != AST_TYPE_DOUBLE) {
+                    error_print(ERR_SEM_TYPE, expr->pos,
+                                "Member 'floor' requires receiver of type Double, but got '%s'",
+                                ast_type_to_string(rec_type->kind));
+                    return ERR_SEM_TYPE;
+                }
+                *out_type = type_get_double();
+            } else if (strcmp(name, "length") == 0) {
+                if (rec_type->kind != AST_TYPE_STRING) {
+                    error_print(ERR_SEM_TYPE, expr->pos,
+                                "Member 'length' requires receiver of type String, but got '%s'",
+                                ast_type_to_string(rec_type->kind));
+                    return ERR_SEM_TYPE;
+                }
+                *out_type = type_get_int();
+            } else {
+                error_print(ERR_SEM_UNDEFINED, expr->pos,
+                            "Unknown member '%s' for type '%s'",
+                            name, ast_type_to_string(rec_type->kind));
+                return ERR_SEM_UNDEFINED;
+            }
+            break;
+        }
+
         case AST_EXPR_INTERPOLATED_STRING: {
             for (size_t i = 0; i < expr->data.interpolated_string.count; i++) {
                 AstStringPart *part = &expr->data.interpolated_string.items[i];
