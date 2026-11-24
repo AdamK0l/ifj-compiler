@@ -127,6 +127,56 @@ int semantic_pass1(AstProgram *program, Symtable *table) {
 
     for (size_t i = 0; i < program->count; i++) {
         AstDefinition *def = &program->items[i];
+        if (def->kind == AST_DEF_EXTENSION) {
+            AstExtension *ext = def->data.extension;
+            if (!ext || !ext->receiver.type || !ext->receiver.name) {
+                continue;
+            }
+
+            for (size_t j = 0; j < ext->method_count; j++) {
+                AstFunction *method = ext->methods[j];
+                if (!method || !method->name) {
+                    continue;
+                }
+
+                // Check duplicate parameters in method
+                if (_has_duplicate_parameters(method)) {
+                    error_print(ERR_SEM_REDEFINITION, method->pos,
+                                "Duplicate parameter name in extension method '%s'", method->name);
+                    return ERR_SEM_REDEFINITION;
+                }
+
+                // Check if any parameter name collides with receiver name
+                for (size_t list_idx = 0; list_idx < method->parameters.count; list_idx++) {
+                    AstParameterList *plist = &method->parameters.items[list_idx];
+                    for (size_t p = 0; p < plist->count; p++) {
+                        if (strcmp(plist->items[p].name, ext->receiver.name) == 0) {
+                            error_print(ERR_SEM_REDEFINITION, method->pos,
+                                        "Parameter '%s' collides with extension receiver name in method '%s'",
+                                        plist->items[p].name, method->name);
+                            return ERR_SEM_REDEFINITION;
+                        }
+                    }
+                }
+
+                // Extension method cannot be annotated with @main
+                if (method->is_main) {
+                    error_print(ERR_SEM_REDEFINITION, method->pos,
+                                "Extension method '%s' cannot be annotated with @main", method->name);
+                    return ERR_SEM_REDEFINITION;
+                }
+
+                // Register extension method (checks redefinition for the same receiver type -> Error 4)
+                if (!symtable_insert_extension(table, ext->receiver.type, ext->receiver.name, method, ext)) {
+                    error_print(ERR_SEM_REDEFINITION, method->pos,
+                                "Redefinition of extension method '%s' for type '%s'",
+                                method->name, ast_type_to_string(ext->receiver.type->kind));
+                    return ERR_SEM_REDEFINITION;
+                }
+            }
+            continue;
+        }
+
         if (def->kind != AST_DEF_FUNCTION) {
             continue;
         }
@@ -199,9 +249,9 @@ int semantic_pass1(AstProgram *program, Symtable *table) {
 
 /* ==================== Pass 2 Implementation ==================== */
 
-static int _check_statement(AstStatement *stmt, Symtable *table, AstType *enclosing_return_type, AstType **out_type);
+int check_statement(AstStatement *stmt, Symtable *table, AstType *enclosing_return_type, AstType **out_type);
 
-static int _check_block(AstBLOCK *block, Symtable *table, AstType *enclosing_return_type, AstType **out_block_type) {
+int check_block(AstBLOCK *block, Symtable *table, AstType *enclosing_return_type, AstType **out_block_type) {
     if (!block) {
         if (out_block_type) {
             *out_block_type = type_get_unit();
@@ -216,7 +266,7 @@ static int _check_block(AstBLOCK *block, Symtable *table, AstType *enclosing_ret
         if (!stmt) continue;
 
         AstType *stmt_type = NULL;
-        int res = _check_statement(stmt, table, enclosing_return_type, &stmt_type);
+        int res = check_statement(stmt, table, enclosing_return_type, &stmt_type);
         if (res != ERR_OK) {
             return res;
         }
@@ -234,13 +284,27 @@ static int _check_block(AstBLOCK *block, Symtable *table, AstType *enclosing_ret
     return ERR_OK;
 }
 
-static int _check_statement(AstStatement *stmt, Symtable *table, AstType *enclosing_return_type, AstType **out_type) {
+int check_statement(AstStatement *stmt, Symtable *table, AstType *enclosing_return_type, AstType **out_type) {
     if (!stmt || !table) {
         return ERR_INTERNAL;
     }
 
     switch (stmt->kind) {
         case AST_STATEMENT_VARIABLE: {
+            // Spec section 5.7: Named functions can only be assigned to variables with an explicitly declared type
+            if (stmt->data.variable.declared_type == NULL &&
+                stmt->data.variable.initializer &&
+                stmt->data.variable.initializer->kind == AST_EXPR_NAME) {
+                BstNode *fn_node = symtable_lookup(table, stmt->data.variable.initializer->data.name);
+                if (fn_node && fn_node->data.kind == SYMBOL_FUNCTION) {
+                    error_print(ERR_SEM_TYPE, stmt->pos,
+                                "Assigning function '%s' to variable '%s' requires an explicit variable type",
+                                stmt->data.variable.initializer->data.name,
+                                stmt->data.variable.name);
+                    return ERR_SEM_TYPE;
+                }
+            }
+
             AstType *init_type = NULL;
             int res = check_expression(stmt->data.variable.initializer, table, &init_type);
             if (res != ERR_OK) {
@@ -333,7 +397,7 @@ static int _check_statement(AstStatement *stmt, Symtable *table, AstType *enclos
             }
 
             symtable_push_scope(table);
-            res = _check_block(stmt->data.while_loop.inside, table, enclosing_return_type, NULL);
+            res = check_block(stmt->data.while_loop.inside, table, enclosing_return_type, NULL);
             symtable_pop_scope(table);
             if (res != ERR_OK) {
                 return res;
@@ -416,7 +480,7 @@ static int _check_statement(AstStatement *stmt, Symtable *table, AstType *enclos
                 }
             }
 
-            res = _check_block(stmt->data.for_loop.inside, table, enclosing_return_type, NULL);
+            res = check_block(stmt->data.for_loop.inside, table, enclosing_return_type, NULL);
             symtable_pop_scope(table);
             if (res != ERR_OK) return res;
 
@@ -435,6 +499,64 @@ int semantic_pass2(AstProgram *program, Symtable *table) {
         return ERR_INTERNAL;
     }
 
+    // Pass 2a: Check all extension method bodies
+    for (size_t i = 0; i < program->count; i++) {
+        AstDefinition *def = &program->items[i];
+        if (def->kind != AST_DEF_EXTENSION) {
+            continue;
+        }
+
+        AstExtension *ext = def->data.extension;
+        if (!ext) continue;
+
+        for (size_t j = 0; j < ext->method_count; j++) {
+            AstFunction *method = ext->methods[j];
+            if (!method) continue;
+
+            symtable_push_scope(table);
+
+            // Insert receiver into local scope as immutable (val) variable
+            symtable_insert_variable(table, ext->receiver.name, ext->receiver.type, false);
+
+            // Insert method parameters into local scope as immutable (val) variables
+            for (size_t list_idx = 0; list_idx < method->parameters.count; list_idx++) {
+                AstParameterList *plist = &method->parameters.items[list_idx];
+                for (size_t p = 0; p < plist->count; p++) {
+                    AstParameter *param = &plist->items[p];
+                    symtable_insert_variable(table, param->name, param->type, false);
+                }
+            }
+
+            // Check method body block
+            AstType *body_return_type = NULL;
+            int res = check_block(method->inside, table, method->return_type, &body_return_type);
+            if (res != ERR_OK) {
+                symtable_pop_scope(table);
+                return res;
+            }
+
+            // Validate return type against body
+            if (method->return_type != NULL) {
+                if (method->return_type->kind != AST_TYPE_UNIT &&
+                    !type_is_compatible(method->return_type, body_return_type)) {
+                    error_print(ERR_SEM_TYPE, method->pos,
+                                "Extension method '%s' declared return type '%s', but body evaluates to '%s'",
+                                method->name,
+                                ast_type_to_string(method->return_type->kind),
+                                ast_type_to_string(body_return_type->kind));
+                    symtable_pop_scope(table);
+                    return ERR_SEM_TYPE;
+                }
+            } else {
+                // Infer return type from body
+                method->return_type = ast_type_clone(body_return_type);
+            }
+
+            symtable_pop_scope(table);
+        }
+    }
+
+    // Pass 2b: Check all top-level user function bodies
     for (size_t i = 0; i < program->count; i++) {
         AstDefinition *def = &program->items[i];
         if (def->kind != AST_DEF_FUNCTION) {
@@ -458,7 +580,7 @@ int semantic_pass2(AstProgram *program, Symtable *table) {
 
         // Check function body block
         AstType *body_return_type = NULL;
-        int res = _check_block(func->inside, table, func->return_type, &body_return_type);
+        int res = check_block(func->inside, table, func->return_type, &body_return_type);
         if (res != ERR_OK) {
             symtable_pop_scope(table);
             return res;

@@ -45,4 +45,14 @@ int semantic_pass1(AstProgram *program, Symtable *table);
  */
 int semantic_pass2(AstProgram *program, Symtable *table);
 
+/**
+ * Type checks a single statement within an active scope.
+ */
+int check_statement(AstStatement *stmt, Symtable *table, AstType *enclosing_return_type, AstType **out_type);
+
+/**
+ * Type checks an indented block of statements within an active scope.
+ */
+int check_block(AstBLOCK *block, Symtable *table, AstType *enclosing_return_type, AstType **out_block_type);
+
 #endif // SEMANTICS_H
