@@ -2,7 +2,7 @@
 2.  <prolog>      	    -> IMPORT ID DOT MUL EOL
 3.  <definitions> 	    -> <function> <definitions>      		        PREDICT: { DEF, AT_MAIN }
 4.  <definitions>	    -> ε                             		        PREDICT: { EOF }
-5.  <function> 		    -> <opt_main> DEF ID LEFT_PAREN <parameters> RIGHT_PAREN <opt_type> ASSIGN EOL <block>
+5.  <function> 		    -> <opt_main> DEF ID LEFT_PAREN <parameters> RIGHT_PAREN <opt_type> ASSIGN <function_body>
 5.1 <opt_main>		    -> AT_MAIN <opt_eol>				            PREDICT: { AT_MAIN }
 5.2 <opt_main>		    -> epsilon					                    PREDICT: { DEF }
 5.3 <opt_eol>		    -> EOL						                    PREDICT: { EOL }
@@ -16,12 +16,34 @@
 12. <type>		        -> BOOLEAN					                    PREDICT: { BOOLEAN }
 13. <parameters>	    -> <parameter> <parameters_next>		        PREDICT: { ID }
 14. <parameters>	    -> epsilon					                    PREDICT: { RIGHT_PAREN }
-15. <parameters_next>	-> COMMA <parameter> <parameters_next>		    PREDICT: { COMMA }
+15. <parameters_next>	-> COMMA <param_after_comma>        		    PREDICT: { COMMA }
 16. <parameters_next>	-> epsilon					                    PREDICT: { RIGHT_PAREN }
 17. <parameter> 	    -> ID COLON <type>
 18. <block>		        -> INDENT <statement> <statement_next> DEDENT
-19. <statement_next>	-> <statement> <statement_next>			        PREDICT: { VAR, VAL }
+19. <statement_next>	-> <statement> <statement_next>			        PREDICT: { VAR, VAL, WHILE, IF, RETURN, ID, INT_LIT, DOUBLE_LIT, STRING_LIT, LEFT_PAREN, MINUS }
 20. <statement_next> 	-> epsilon 					                    PREDICT:{ DEDENT } 
-21. <statement>		    -> <var_def> EOL
+21. <statement>		    -> <var_def> <stmt_end>                         PREDICT: { VAR, VAL }
 22. <var_def>		    -> VAR ID <opt_type> ASSIGN expr		        PREDICT: { VAR }
 23. <var_def>		    -> VAL ID <opt_type> ASSIGN expr		        PREDICT: { VAL }
+24. <statement>         -> <while_stmt>                                 PREDICT: { WHILE }
+25. <statement>         -> <if_stmt>                                    PREDICT: { IF }
+26. <while_stmt>        -> WHILE expr DO EOL <block>
+27. <if_stmt>           -> IF expr THEN EOL <block> <opt_else>          PREDICT: { IF }
+28. <opt_else>          -> ELSE <else_tail>                             PREDICT: { ELSE }
+29. <opt_else>          -> epsilon                                      PREDICT: { VAR, VAL, WHILE, IF, RETURN, ID, INT_LIT, DOUBLE_LIT, STRING_LIT, LEFT_PAREN, MINUS, DEDENT }
+30. <else_tail>         -> EOL <block>                                  PREDICT: { EOL }
+31. <else_tail>         -> <if_stmt>                                    PREDICT: { IF } 
+32. <statement>         -> RETURN <opt_expr> <stmt_end>                 PREDICT: { RETURN }
+33. <opt_expr>          -> expr                                         PREDICT: { ID, INT_LIT, DOUBLE_LIT, STRING_LIT, LEFT_PAREN, MINUS }
+34. <opt_expr>          -> epsilon                                      PREDICT: { EOL, SEMICOLON }
+35. <statement>         -> ID <id_tail> <stmt_end>                      PREDICT: { ID }
+36. <id_tail>           -> ASSIGN expr                                  PREDICT: { ASSIGN }
+37. <id_tail>           -> <expr_rest>                                  PREDICT: { LEFT_PAREN, DOT, PLUS, MINUS, MUL, DIV, LESS, ..., EOL, SEMICOLON }
+38. <statement>         -> expr <stmt_end>                              PREDICT: {INT_LIT,  DOUBLE_LIT, STRING_LIT, LEFT_PAREN, MINUS }
+39. <function_body>     -> EOL <block>                                  PREDICT: { EOL }
+40. <function_body>     -> expr EOL                                     PREDICT: { ID, INT_LIT, DOUBLE_LIT, STRING_LIT, LEFT_PAREN, MINUS }
+41. <stmt_end>          -> EOL                                          PREDICT: { EOL }
+42. <stmt_end>          -> SEMICOLON                                    PREDICT: { SEMICOLON }
+43. <param_after_comma> -> <parameter> <parameters_next>                PREDICT: { ID }
+44. <param_after_comma> -> epsilon                                      PREDICT: { RIGHT_PAREN }
+
