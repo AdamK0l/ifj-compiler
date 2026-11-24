@@ -187,10 +187,110 @@ static int _check_unary_op(AstExpression *expr, AstType *operand, AstType **out_
     }
 }
 
-/* ==================== Function Call Evaluation ==================== */
+/* ==================== Function & Member Call Evaluation ==================== */
+
+static int _check_member_call(AstExpression *expr, Symtable *table, AstType **out_type) {
+    AstExpression *callee = expr->data.call.callee;
+    AstExpression *recv = callee->data.member.receiver;
+    const char *name = callee->data.member.name;
+
+    if (!recv) {
+        error_print(ERR_SEM_UNDEFINED, expr->pos, "Member call receiver is missing");
+        return ERR_SEM_UNDEFINED;
+    }
+    if (!name) {
+        error_print(ERR_SEM_UNDEFINED, expr->pos, "Member name is missing");
+        return ERR_SEM_UNDEFINED;
+    }
+
+    AstType *rec_type = NULL;
+    int res = check_expression(recv, table, &rec_type);
+    if (res != ERR_OK) return res;
+
+    // Check if user is attempting to call a VALMEM built-in with parentheses
+    if (strcmp(name, "toString") == 0 || strcmp(name, "toInt") == 0 ||
+        strcmp(name, "floor") == 0 || strcmp(name, "length") == 0) {
+        error_print(ERR_SEM_CALL, expr->pos,
+                    "Built-in member '%s' cannot be called with arguments or parentheses", name);
+        return ERR_SEM_CALL;
+    }
+
+    // Look up extension method for this receiver type
+    AstFunction *ext_fn = symtable_lookup_extension(table, rec_type, name);
+    if (!ext_fn) {
+        error_print(ERR_SEM_UNDEFINED, expr->pos,
+                    "Unknown extension method '%s' for type '%s'",
+                    name, ast_type_to_string(rec_type->kind));
+        return ERR_SEM_UNDEFINED;
+    }
+
+    // Check parameterless method without parens called with parens:
+    // Spec: "Povoleny jsou i deklarace bezparametrických metod bez závorek (v příkladu níže např. twice), které se pak volají bez závorek."
+    // "pozor, nelze `x.foo` ani `x.twice()`"
+    if (ext_fn->parameters.count == 0) {
+        error_print(ERR_SEM_CALL, expr->pos,
+                    "Parameterless extension method '%s' must be called without parentheses", name);
+        return ERR_SEM_CALL;
+    }
+
+    // Match parameter lists with argument lists
+    if (expr->data.call.arguments.count != ext_fn->parameters.count) {
+        error_print(ERR_SEM_CALL, expr->pos,
+                    "Extension method '%s' expects %zu parameter list(s), but got %zu",
+                    name, ext_fn->parameters.count, expr->data.call.arguments.count);
+        return ERR_SEM_CALL;
+    }
+
+    for (size_t list_idx = 0; list_idx < ext_fn->parameters.count; list_idx++) {
+        AstParameterList *pl = &ext_fn->parameters.items[list_idx];
+        AstExpressionList *al = &expr->data.call.arguments.items[list_idx];
+
+        if (pl->count != al->count) {
+            error_print(ERR_SEM_CALL, expr->pos,
+                        "Argument count mismatch in list %zu of extension method '%s': expected %zu, got %zu",
+                        list_idx + 1, name, pl->count, al->count);
+            return ERR_SEM_CALL;
+        }
+
+        for (size_t p = 0; p < pl->count; p++) {
+            AstExpression *arg_expr = al->items[p];
+            AstType *arg_type = NULL;
+            res = check_expression(arg_expr, table, &arg_type);
+            if (res != ERR_OK) return res;
+
+            AstType *expected_type = pl->items[p].type;
+            if (!type_is_compatible(expected_type, arg_type)) {
+                error_print(ERR_SEM_CALL, arg_expr->pos,
+                            "Argument %zu in list %zu of extension method '%s' expects type '%s', but got '%s'",
+                            p + 1, list_idx + 1, name,
+                            ast_type_to_string(expected_type->kind),
+                            ast_type_to_string(arg_type->kind));
+                return ERR_SEM_CALL;
+            }
+        }
+    }
+
+    AstType *ret = ext_fn->return_type ? ext_fn->return_type : type_get_unit();
+    if (callee->evaluated_type) {
+        ast_type_free(callee->evaluated_type);
+    }
+    callee->evaluated_type = ast_type_clone(ret);
+
+    *out_type = ret;
+    return ERR_OK;
+}
 
 static int _check_function_call(AstExpression *expr, Symtable *table, AstType **out_type) {
-    if (!expr->data.call.callee || expr->data.call.callee->kind != AST_EXPR_NAME) {
+    if (!expr->data.call.callee) {
+        error_print(ERR_SEM_OTHER, expr->pos, "Callee expression is missing");
+        return ERR_SEM_OTHER;
+    }
+
+    if (expr->data.call.callee->kind == AST_EXPR_MEMBER) {
+        return _check_member_call(expr, table, out_type);
+    }
+
+    if (expr->data.call.callee->kind != AST_EXPR_NAME) {
         error_print(ERR_SEM_OTHER, expr->pos, "Complex callee expressions are not supported");
         return ERR_SEM_OTHER;
     }
@@ -364,10 +464,23 @@ int check_expression(AstExpression *expr, Symtable *table, AstType **out_type) {
                 }
                 *out_type = type_get_int();
             } else {
-                error_print(ERR_SEM_UNDEFINED, expr->pos,
-                            "Unknown member '%s' for type '%s'",
-                            name, ast_type_to_string(rec_type->kind));
-                return ERR_SEM_UNDEFINED;
+                // Check if this is a user extension method for rec_type
+                AstFunction *ext_fn = symtable_lookup_extension(table, rec_type, name);
+                if (ext_fn != NULL) {
+                    // Must be a parameterless method defined without parentheses
+                    if (ext_fn->parameters.count > 0) {
+                        error_print(ERR_SEM_CALL, expr->pos,
+                                    "Extension method '%s' defined with parameter list(s) must be called with parentheses",
+                                    name);
+                        return ERR_SEM_CALL;
+                    }
+                    *out_type = ext_fn->return_type ? ext_fn->return_type : type_get_unit();
+                } else {
+                    error_print(ERR_SEM_UNDEFINED, expr->pos,
+                                "Unknown member '%s' for type '%s'",
+                                name, ast_type_to_string(rec_type->kind));
+                    return ERR_SEM_UNDEFINED;
+                }
             }
             break;
         }
