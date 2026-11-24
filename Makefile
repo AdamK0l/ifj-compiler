@@ -28,7 +28,7 @@ LOGIN = xkolaca00
 ARCHIVE = $(LOGIN).zip
 PACK_DIR = _pack
 
-.PHONY: all clean format valgrind pack
+.PHONY: all clean format valgrind pack test
 
 # Default target: build executable
 all: $(TARGET)
@@ -95,3 +95,7 @@ pack: clean
 		echo "==> Note: is_it_ok.sh not found in root (download it from course e-learning for final verification)."; \
 	fi
 	@echo "==> Done: Archive $(ARCHIVE) has been successfully created and verified."
+
+# Formatted unit tests runner (AddressSanitizer + UndefinedBehaviorSanitizer)
+test:
+	@python3 tests/test_runner.py $(if $(filter 1,$(V)),-v,)
