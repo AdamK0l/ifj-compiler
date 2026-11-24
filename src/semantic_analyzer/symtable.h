@@ -22,11 +22,31 @@ typedef struct Scope {
 } Scope;
 
 /**
- * Symbol table structure managing the hierarchy of active scopes.
+ * Extension method entry storing metadata for user extension methods.
+ */
+typedef struct ExtensionMethod {
+    AstType *receiver_type;
+    const char *receiver_name;
+    AstFunction *function;
+    const AstExtension *extension;
+} ExtensionMethod;
+
+/**
+ * Dynamic table of extension methods.
+ */
+typedef struct ExtensionTable {
+    ExtensionMethod *items;
+    size_t count;
+    size_t capacity;
+} ExtensionTable;
+
+/**
+ * Symbol table structure managing the hierarchy of active scopes and registered extensions.
  */
 typedef struct Symtable {
     Scope *current_scope;     // Pointer to the currently active innermost scope
     Scope *global_scope;
+    ExtensionTable extensions; // Registered extension methods
 } Symtable;
 
 /**
@@ -64,4 +84,15 @@ BstNode *symtable_lookup_current_scope(Symtable *table, const char *name);
 bool symtable_insert_variable(Symtable *table, const char *name, AstType *type, bool is_changeable);
 
 bool symtable_insert_function(Symtable *table, const char *name, AstType *return_type, AstType **param_types, size_t param_count, bool is_builtin);
+
+/**
+ * Inserts an extension method into the symbol table.
+ * Returns false if an extension method with the same name already exists for the same receiver type.
+ */
+bool symtable_insert_extension(Symtable *table, AstType *receiver_type, const char *receiver_name, AstFunction *function, const AstExtension *ext);
+
+/**
+ * Looks up an extension method by receiver type and method name.
+ */
+AstFunction *symtable_lookup_extension(Symtable *table, const AstType *receiver_type, const char *method_name);
 #endif // SYMTABLE_H
