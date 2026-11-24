@@ -41,5 +41,10 @@ bool parse_opt_type(Parser *p, AstType **out);
 bool parse_block(Parser *p);
 bool parse_parameters_next(Parser *p, AstParameterList *list);
 bool parse_parameter(Parser *p, AstParameterList *list);
+bool parse_statement(Parser *p);
+bool parse_statement_next(Parser *p);
+bool parse_var_def(Parser *p);
+
+bool parse_expression(Parser *p);
 
 #endif

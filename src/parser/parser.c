@@ -256,7 +256,14 @@ bool parse_opt_type(Parser *p, AstType **out){
 }
 
 bool parse_block(Parser *p){
-    (void)p; return true;
+    if(!parser_expect(p, TOKEN_INDENT, "indented block")) return false;
+
+    if(!parse_statement(p)) return false;
+
+    if(!parse_statement_next(p)) return false;
+
+    if(!parser_expect(p, TOKEN_DEDENT, "end of block")) return false;
+    return true;
 }
 
 bool parse_parameter(Parser *p, AstParameterList *list){
@@ -292,4 +299,60 @@ bool parse_parameters_next(Parser *p, AstParameterList *list){
     
 }
 
+bool parse_statement(Parser *p){
+    if(!parse_var_def(p)) return false;
 
+    if(!parser_expect(p, TOKEN_EOL, "'end of line'")) return false;
+    return true;
+}
+
+bool parse_statement_next(Parser *p){
+    if(check_keyword(p, KW_VAR) || check_keyword(p, KW_VAL)){
+        if(!parse_statement(p)) return false;
+        return parse_statement_next(p);
+    }
+    if(check(p, TOKEN_DEDENT)){
+        return true;
+    }
+    return syntax_error(p, "statement or end of block");
+    
+}
+
+bool parse_var_def(Parser *p){
+    bool is_mutable; // TODO: put in var AST node
+    if(check_keyword(p, KW_VAR)) {
+        is_mutable = true;
+    } else if(check_keyword(p, KW_VAL)) {
+        is_mutable = false;
+    } else{
+        return syntax_error(p, "'var' or 'val'");
+    }
+    advance(p);
+
+    if(!check(p, TOKEN_IDENTIFIER)) return syntax_error(p, "variable or value name");
+    char *name = take_string(p);
+    advance(p);
+    (void)is_mutable; // TODO: put in var AST node
+
+    AstType *type = NULL;
+    if(!parse_opt_type(p, &type)){
+        free(name); // TODO: put in AST node
+        return false;
+    } 
+
+    if(!parser_expect_operator(p, OP_ASSIGN, "'='")){
+        free(name);
+        if(type != NULL) ast_type_free(type);
+        return false;
+    }
+
+    if(!parse_expression(p)){
+        free(name);
+        ast_type_free(type);
+        return false;
+    }
+
+    free(name);            // TODO: put into variable AST node
+    ast_type_free(type);   // TODO: put into variable AST node
+    return true;
+}
