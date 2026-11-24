@@ -1,2 +1,4 @@
 import ifj26.*
 def f(a: Int, b: String): Unit =
+    val x = 10
+    var y: Int = a
