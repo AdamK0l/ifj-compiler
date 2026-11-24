@@ -291,7 +291,7 @@ int check_statement(AstStatement *stmt, Symtable *table, AstType *enclosing_retu
 
     switch (stmt->kind) {
         case AST_STATEMENT_VARIABLE: {
-            // Spec section 5.7: "běžné funkce však lze takto přiřadit jen do proměnných, které mají explicitně určený typ"
+            // Spec section 5.7: Named functions can only be assigned to variables with an explicitly declared type
             if (stmt->data.variable.declared_type == NULL &&
                 stmt->data.variable.initializer &&
                 stmt->data.variable.initializer->kind == AST_EXPR_NAME) {

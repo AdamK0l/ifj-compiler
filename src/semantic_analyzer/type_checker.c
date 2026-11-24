@@ -274,8 +274,8 @@ static int _check_member_call(AstExpression *expr, Symtable *table, AstType **ou
     }
 
     // Check parameterless method without parens called with parens:
-    // Spec: "Povoleny jsou i deklarace bezparametrických metod bez závorek (v příkladu níže např. twice), které se pak volají bez závorek."
-    // "pozor, nelze `x.foo` ani `x.twice()`"
+    // Spec section 5.9: Parameterless methods declared without parentheses must be called without parentheses
+    // Warning: "x.foo" or "x.twice()" is not allowed
     if (ext_fn->parameters.count == 0) {
         error_print(ERR_SEM_CALL, expr->pos,
                     "Parameterless extension method '%s' must be called without parentheses", name);
