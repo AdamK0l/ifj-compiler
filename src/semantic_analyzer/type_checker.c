@@ -8,6 +8,7 @@
 #include "type_checker.h"
 #include "semantics.h"
 #include "errors.h"
+#include "memory.h"
 #include <string.h>
 
 /* ==================== Static Built-in Atomic Types ==================== */
@@ -25,6 +26,42 @@ AstType *type_get_string(void) { return &_type_string; }
 AstType *type_get_boolean(void) { return &_type_boolean; }
 AstType *type_get_unit(void) { return &_type_unit; }
 AstType *type_get_any(void) { return &_type_any; }
+
+/* ==================== Function Type & Block Helpers ==================== */
+
+static AstType *make_function_type(AstType **param_types, size_t param_count, AstType *return_type) {
+    AstType **cloned_params = NULL;
+    if (param_count > 0 && param_types != NULL) {
+        cloned_params = (AstType **)safe_malloc(sizeof(AstType *) * param_count);
+        for (size_t i = 0; i < param_count; i++) {
+            cloned_params[i] = ast_type_clone(param_types[i]);
+        }
+    }
+    AstType *cloned_result = ast_type_clone(return_type ? return_type : type_get_unit());
+    return ast_type_create_function(cloned_params, param_count, cloned_result);
+}
+
+static bool _block_has_return(const AstBLOCK *block) {
+    if (!block) return false;
+    for (size_t i = 0; i < block->statements.count; i++) {
+        const AstStatement *s = block->statements.items[i];
+        if (!s) continue;
+        if (s->kind == AST_STATEMENT_RETURN) {
+            return true;
+        }
+        if (s->kind == AST_STATEMENT_WHILE) {
+            if (_block_has_return(s->data.while_loop.inside)) {
+                return true;
+            }
+        }
+        if (s->kind == AST_STATEMENT_FOR) {
+            if (_block_has_return(s->data.for_loop.inside)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
 
 /* ==================== Type Compatibility Helpers ==================== */
 
@@ -50,6 +87,18 @@ bool type_is_compatible(const AstType *expected, const AstType *actual) {
     // Implicit promotion: Int -> Double (expected Double, given Int)
     if (expected->kind == AST_TYPE_DOUBLE && actual->kind == AST_TYPE_INT) {
         return true;
+    }
+    // Function type compatibility
+    if (expected->kind == AST_TYPE_FUNCTION && actual->kind == AST_TYPE_FUNCTION) {
+        if (expected->function.parameter_count != actual->function.parameter_count) {
+            return false;
+        }
+        for (size_t i = 0; i < expected->function.parameter_count; i++) {
+            if (!ast_type_equals(expected->function.parameters[i], actual->function.parameters[i])) {
+                return false;
+            }
+        }
+        return type_is_compatible(expected->function.result, actual->function.result);
     }
     return false;
 }
@@ -290,59 +339,155 @@ static int _check_function_call(AstExpression *expr, Symtable *table, AstType **
         return _check_member_call(expr, table, out_type);
     }
 
-    if (expr->data.call.callee->kind != AST_EXPR_NAME) {
-        error_print(ERR_SEM_OTHER, expr->pos, "Complex callee expressions are not supported");
-        return ERR_SEM_OTHER;
+    if (expr->data.call.callee->kind == AST_EXPR_NAME) {
+        const char *func_name = expr->data.call.callee->data.name;
+        BstNode *func_node = symtable_lookup(table, func_name);
+
+        if (!func_node) {
+            error_print(ERR_SEM_UNDEFINED, expr->pos, "Call to undefined function '%s'", func_name);
+            return ERR_SEM_UNDEFINED;
+        }
+
+        if (func_node->data.kind == SYMBOL_VARIABLE) {
+            // Callee is a variable holding a function value
+            AstType *var_type = func_node->data.type;
+            if (!var_type || var_type->kind != AST_TYPE_FUNCTION) {
+                error_print(ERR_SEM_TYPE, expr->pos,
+                            "Cannot call variable '%s' of non-function type '%s'",
+                            func_name, ast_type_to_string(var_type ? var_type->kind : AST_TYPE_UNIT));
+                return ERR_SEM_TYPE;
+            }
+
+            size_t arg_count = 0;
+            for (size_t i = 0; i < expr->data.call.arguments.count; i++) {
+                arg_count += expr->data.call.arguments.items[i].count;
+            }
+
+            if (arg_count != var_type->function.parameter_count) {
+                error_print(ERR_SEM_CALL, expr->pos,
+                            "Function value '%s' expects %zu argument(s), but got %zu",
+                            func_name, var_type->function.parameter_count, arg_count);
+                return ERR_SEM_CALL;
+            }
+
+            size_t arg_idx = 0;
+            for (size_t i = 0; i < expr->data.call.arguments.count; i++) {
+                for (size_t j = 0; j < expr->data.call.arguments.items[i].count; j++) {
+                    AstExpression *arg_expr = expr->data.call.arguments.items[i].items[j];
+                    AstType *arg_type = NULL;
+                    int res = check_expression(arg_expr, table, &arg_type);
+                    if (res != ERR_OK) return res;
+
+                    AstType *expected_type = var_type->function.parameters[arg_idx];
+                    if (!type_is_compatible(expected_type, arg_type)) {
+                        error_print(ERR_SEM_CALL, arg_expr->pos,
+                                    "Argument %zu of function value '%s' expects type '%s', but got '%s'",
+                                    arg_idx + 1, func_name,
+                                    ast_type_to_string(expected_type->kind),
+                                    ast_type_to_string(arg_type->kind));
+                        return ERR_SEM_CALL;
+                    }
+                    arg_idx++;
+                }
+            }
+
+            AstType *ret = var_type->function.result ? var_type->function.result : type_get_unit();
+            if (expr->data.call.callee->evaluated_type) {
+                ast_type_free(expr->data.call.callee->evaluated_type);
+            }
+            expr->data.call.callee->evaluated_type = ast_type_clone(var_type);
+            *out_type = ret;
+            return ERR_OK;
+        }
+
+        // Regular global function call
+        size_t arg_count = 0;
+        for (size_t i = 0; i < expr->data.call.arguments.count; i++) {
+            arg_count += expr->data.call.arguments.items[i].count;
+        }
+
+        if (arg_count != func_node->data.param_count) {
+            error_print(ERR_SEM_CALL, expr->pos,
+                        "Function '%s' expects %zu argument(s), but got %zu",
+                        func_name, func_node->data.param_count, arg_count);
+            return ERR_SEM_CALL;
+        }
+
+        size_t arg_idx = 0;
+        for (size_t i = 0; i < expr->data.call.arguments.count; i++) {
+            for (size_t j = 0; j < expr->data.call.arguments.items[i].count; j++) {
+                AstExpression *arg_expr = expr->data.call.arguments.items[i].items[j];
+                AstType *arg_type = NULL;
+
+                int res = check_expression(arg_expr, table, &arg_type);
+                if (res != ERR_OK) {
+                    return res;
+                }
+
+                AstType *expected_type = func_node->data.param_types[arg_idx];
+                if (!type_is_compatible(expected_type, arg_type)) {
+                    error_print(ERR_SEM_CALL, arg_expr->pos,
+                                "Argument %zu of function '%s' expects type '%s', but got '%s'",
+                                arg_idx + 1, func_name,
+                                ast_type_to_string(expected_type->kind),
+                                ast_type_to_string(arg_type->kind));
+                    return ERR_SEM_CALL;
+                }
+
+                arg_idx++;
+            }
+        }
+
+        *out_type = func_node->data.type ? func_node->data.type : type_get_unit();
+        return ERR_OK;
     }
 
-    const char *func_name = expr->data.call.callee->data.name;
-    BstNode *func_node = symtable_lookup(table, func_name);
+    // General expression callee (e.g. lambda or call returning a function)
+    AstType *callee_type = NULL;
+    int res = check_expression(expr->data.call.callee, table, &callee_type);
+    if (res != ERR_OK) return res;
 
-    if (!func_node || func_node->data.kind != SYMBOL_FUNCTION) {
-        error_print(ERR_SEM_UNDEFINED, expr->pos, "Call to undefined function '%s'", func_name);
-        return ERR_SEM_UNDEFINED;
+    if (!callee_type || callee_type->kind != AST_TYPE_FUNCTION) {
+        error_print(ERR_SEM_TYPE, expr->pos,
+                    "Expression of type '%s' cannot be called as a function",
+                    ast_type_to_string(callee_type ? callee_type->kind : AST_TYPE_UNIT));
+        return ERR_SEM_TYPE;
     }
 
-    // Count total arguments across all argument lists
     size_t arg_count = 0;
     for (size_t i = 0; i < expr->data.call.arguments.count; i++) {
         arg_count += expr->data.call.arguments.items[i].count;
     }
 
-    if (arg_count != func_node->data.param_count) {
+    if (arg_count != callee_type->function.parameter_count) {
         error_print(ERR_SEM_CALL, expr->pos,
-                    "Function '%s' expects %zu argument(s), but got %zu",
-                    func_name, func_node->data.param_count, arg_count);
+                    "Function value expects %zu argument(s), but got %zu",
+                    callee_type->function.parameter_count, arg_count);
         return ERR_SEM_CALL;
     }
 
-    // Type check each argument
     size_t arg_idx = 0;
     for (size_t i = 0; i < expr->data.call.arguments.count; i++) {
         for (size_t j = 0; j < expr->data.call.arguments.items[i].count; j++) {
             AstExpression *arg_expr = expr->data.call.arguments.items[i].items[j];
             AstType *arg_type = NULL;
+            res = check_expression(arg_expr, table, &arg_type);
+            if (res != ERR_OK) return res;
 
-            int res = check_expression(arg_expr, table, &arg_type);
-            if (res != ERR_OK) {
-                return res;
-            }
-
-            AstType *expected_type = func_node->data.param_types[arg_idx];
+            AstType *expected_type = callee_type->function.parameters[arg_idx];
             if (!type_is_compatible(expected_type, arg_type)) {
                 error_print(ERR_SEM_CALL, arg_expr->pos,
-                            "Argument %zu of function '%s' expects type '%s', but got '%s'",
-                            arg_idx + 1, func_name,
+                            "Argument %zu expects type '%s', but got '%s'",
+                            arg_idx + 1,
                             ast_type_to_string(expected_type->kind),
                             ast_type_to_string(arg_type->kind));
                 return ERR_SEM_CALL;
             }
-
             arg_idx++;
         }
     }
 
-    *out_type = func_node->data.type ? func_node->data.type : type_get_unit();
+    *out_type = callee_type->function.result ? callee_type->function.result : type_get_unit();
     return ERR_OK;
 }
 
@@ -382,12 +527,21 @@ int check_expression(AstExpression *expr, Symtable *table, AstType **out_type) {
                 error_print(ERR_SEM_UNDEFINED, expr->pos, "Undefined identifier '%s'", expr->data.name);
                 return ERR_SEM_UNDEFINED;
             }
-            if (node->data.kind != SYMBOL_VARIABLE) {
-                error_print(ERR_SEM_TYPE, expr->pos,
-                            "Identifier '%s' refers to a function, not a variable", expr->data.name);
-                return ERR_SEM_TYPE;
+            if (node->data.kind == SYMBOL_VARIABLE) {
+                *out_type = node->data.type;
+            } else if (node->data.kind == SYMBOL_FUNCTION) {
+                // Function reference as a value
+                AstType *fn_type = make_function_type(
+                    node->data.param_types,
+                    node->data.param_count,
+                    node->data.type ? node->data.type : type_get_unit()
+                );
+                if (expr->evaluated_type) {
+                    ast_type_free(expr->evaluated_type);
+                }
+                expr->evaluated_type = fn_type;
+                *out_type = fn_type;
             }
-            *out_type = node->data.type;
             break;
         }
 
@@ -541,15 +695,68 @@ int check_expression(AstExpression *expr, Symtable *table, AstType **out_type) {
             break;
         }
 
+        case AST_EXPR_LAMBDA: {
+            size_t param_cnt = expr->data.lambda.parameters.count;
+            for (size_t i = 0; i < param_cnt; i++) {
+                const char *n1 = expr->data.lambda.parameters.items[i].name;
+                for (size_t j = i + 1; j < param_cnt; j++) {
+                    const char *n2 = expr->data.lambda.parameters.items[j].name;
+                    if (n1 && n2 && strcmp(n1, n2) == 0) {
+                        error_print(ERR_SEM_REDEFINITION, expr->pos,
+                                    "Duplicate parameter name '%s' in lambda", n1);
+                        return ERR_SEM_REDEFINITION;
+                    }
+                }
+            }
+
+            if (_block_has_return(expr->data.lambda.inside)) {
+                error_print(ERR_SEM_OTHER, expr->pos,
+                            "Return statement is not allowed inside a lambda expression");
+                return ERR_SEM_OTHER;
+            }
+
+            symtable_push_scope(table);
+            for (size_t p = 0; p < param_cnt; p++) {
+                AstParameter *param = &expr->data.lambda.parameters.items[p];
+                symtable_insert_variable(table, param->name, param->type, false);
+            }
+
+            AstType *body_type = NULL;
+            res = check_block(expr->data.lambda.inside, table, NULL, &body_type);
+            symtable_pop_scope(table);
+            if (res != ERR_OK) return res;
+
+            AstType **param_types = NULL;
+            if (param_cnt > 0) {
+                param_types = (AstType **)safe_malloc(sizeof(AstType *) * param_cnt);
+                for (size_t p = 0; p < param_cnt; p++) {
+                    param_types[p] = ast_type_clone(expr->data.lambda.parameters.items[p].type);
+                }
+            }
+            AstType *fn_type = ast_type_create_function(
+                param_types, param_cnt, ast_type_clone(body_type ? body_type : type_get_unit())
+            );
+
+            if (expr->evaluated_type) {
+                ast_type_free(expr->evaluated_type);
+            }
+            expr->evaluated_type = fn_type;
+            *out_type = fn_type;
+            break;
+        }
+
         default:
             error_print(ERR_SEM_OTHER, expr->pos, "Unsupported expression kind %d", expr->kind);
             return ERR_SEM_OTHER;
     }
 
     // Write evaluated type into AST node for Code Generator
-    if (expr->evaluated_type != NULL) {
-        ast_type_free(expr->evaluated_type);
+    if (expr->evaluated_type != *out_type) {
+        if (expr->evaluated_type != NULL) {
+            ast_type_free(expr->evaluated_type);
+        }
+        expr->evaluated_type = ast_type_clone(*out_type);
+        *out_type = expr->evaluated_type;
     }
-    expr->evaluated_type = ast_type_clone(*out_type);
     return ERR_OK;
 }

@@ -291,6 +291,20 @@ int check_statement(AstStatement *stmt, Symtable *table, AstType *enclosing_retu
 
     switch (stmt->kind) {
         case AST_STATEMENT_VARIABLE: {
+            // Spec section 5.7: "běžné funkce však lze takto přiřadit jen do proměnných, které mají explicitně určený typ"
+            if (stmt->data.variable.declared_type == NULL &&
+                stmt->data.variable.initializer &&
+                stmt->data.variable.initializer->kind == AST_EXPR_NAME) {
+                BstNode *fn_node = symtable_lookup(table, stmt->data.variable.initializer->data.name);
+                if (fn_node && fn_node->data.kind == SYMBOL_FUNCTION) {
+                    error_print(ERR_SEM_TYPE, stmt->pos,
+                                "Assigning function '%s' to variable '%s' requires an explicit variable type",
+                                stmt->data.variable.initializer->data.name,
+                                stmt->data.variable.name);
+                    return ERR_SEM_TYPE;
+                }
+            }
+
             AstType *init_type = NULL;
             int res = check_expression(stmt->data.variable.initializer, table, &init_type);
             if (res != ERR_OK) {
