@@ -44,6 +44,18 @@ bool parse_parameter(Parser *p, AstParameterList *list);
 bool parse_statement(Parser *p);
 bool parse_statement_next(Parser *p);
 bool parse_var_def(Parser *p);
+bool parse_stmt_end(Parser *p);
+bool is_expr_start(Parser *p);
+bool parse_while(Parser *p);
+bool parse_if(Parser *p);
+bool parse_return(Parser *p);
+bool parse_id_statement(Parser *p);
+bool parse_function_body(Parser *p);
+bool parse_return(Parser *p);
+bool parse_id_statement(Parser *p);
+bool parse_expression_rest(Parser *p, char *first_id, position pos);
+bool parse_opt_else(Parser *p);
+bool parse_else_tail(Parser *p);
 
 bool parse_expression(Parser *p);
 

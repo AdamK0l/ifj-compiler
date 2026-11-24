@@ -175,9 +175,7 @@ bool parse_function(Parser *p){
 
     if(!parser_expect_operator(p, OP_ASSIGN, "'='")) return false;
 
-    if(!parser_expect(p, TOKEN_EOL, "end of line")) return false;
-
-    if(!parse_block(p)) return false;
+    if(!parse_function_body(p)) return false;
 
     return true;
 }
@@ -288,33 +286,22 @@ bool parse_parameter(Parser *p, AstParameterList *list){
     return true;
 }
 
+/* 
+    15. <parameters_next>   -> COMMA <param_after_comma>      PREDICT: { COMMA }
+    16. <parameters_next>   -> ε                              PREDICT: { RIGHT_PAREN }
+    43. <param_after_comma> -> <parameter> <parameters_next>  PREDICT: { ID } 
+    44. <param_after_comma> -> ε                              PREDICT: { RIGHT_PAREN } 
+*/
 bool parse_parameters_next(Parser *p, AstParameterList *list){
     if(check(p, TOKEN_COMMA)) {
         advance(p);
+        if(check(p, TOKEN_RIGHT_PAREN)) return true;
         if(!parse_parameter(p, list)) return false;
         return parse_parameters_next(p, list);
-    } else if(check(p, TOKEN_RIGHT_PAREN)) return true; 
+    } 
+    if(check(p, TOKEN_RIGHT_PAREN)) return true;
 
     return syntax_error(p, "',' or ')'");
-    
-}
-
-bool parse_statement(Parser *p){
-    if(!parse_var_def(p)) return false;
-
-    if(!parser_expect(p, TOKEN_EOL, "'end of line'")) return false;
-    return true;
-}
-
-bool parse_statement_next(Parser *p){
-    if(check_keyword(p, KW_VAR) || check_keyword(p, KW_VAL)){
-        if(!parse_statement(p)) return false;
-        return parse_statement_next(p);
-    }
-    if(check(p, TOKEN_DEDENT)){
-        return true;
-    }
-    return syntax_error(p, "statement or end of block");
     
 }
 
@@ -355,4 +342,188 @@ bool parse_var_def(Parser *p){
     free(name);            // TODO: put into variable AST node
     ast_type_free(type);   // TODO: put into variable AST node
     return true;
+}
+
+/* 41. <stmt_end> -> EOL         PREDICT: { EOL }
+   42. <stmt_end> -> SEMICOLON   PREDICT: { SEMICOLON } 
+*/
+bool parse_stmt_end(Parser *p){
+    if(check(p, TOKEN_EOL)) {  
+        advance(p);
+        return true;
+    }
+    if(check(p, TOKEN_SEMICOLON)){
+        advance(p);
+        return true;
+    }
+    return syntax_error(p, "end of line or ';'");
+}
+
+bool is_expr_start(Parser *p){
+    return  check(p, TOKEN_INT_LITERAL) || check(p, TOKEN_DOUBLE_LITERAL) || 
+            check(p, TOKEN_STRING_LITERAL) || check(p, TOKEN_LEFT_PAREN) || check_operator(p, OP_MINUS);
+}
+
+/* 21. <statement> -> <var_def> <stmt_end>          PREDICT: { VAR, VAL }
+   24. <statement> -> <while_stmt>                  PREDICT: { WHILE }
+   25. <statement> -> <if_stmt>                     PREDICT: { IF }
+   32. <statement> -> RETURN <opt_expr> <stmt_end>  PREDICT: { RETURN }
+   35. <statement> -> ID <id_tail> <stmt_end>       PREDICT: { ID }
+   38. <statement> -> expr <stmt_end>               PREDICT: { INT_LIT, DOUBLE_LIT, STRING_LIT, LEFT_PAREN, MINUS } 
+*/
+bool parse_statement(Parser *p){
+    if(check_keyword(p, KW_VAR) || check_keyword(p, KW_VAL)) {
+        if(!parse_var_def(p)) return false;
+        return parse_stmt_end(p);
+    }
+    if(check_keyword(p, KW_WHILE)) {
+        return parse_while(p);
+    }
+    if(check_keyword(p, KW_IF)) {
+        return parse_if(p);
+    }
+    if(check_keyword(p, KW_RETURN)) {
+        return parse_return(p);
+    }
+    if(check(p, TOKEN_IDENTIFIER)) {
+        return parse_id_statement(p);
+    }
+    if(is_expr_start(p)) {
+        if(!parse_expression(p)) return false;
+        return parse_stmt_end(p);
+    }
+    return syntax_error(p, "statement");
+}
+
+/* 19. <statement_next> -> <statement> <statement_next>
+       PREDICT: { VAR, VAL, WHILE, IF, RETURN, ID, INT_LIT, DOUBLE_LIT, STRING_LIT, LEFT_PAREN, MINUS }
+   20. <statement_next> -> ε   PREDICT: { DEDENT } 
+*/
+bool parse_statement_next(Parser *p){
+    if(check(p, TOKEN_DEDENT)) { 
+        return true;
+    } 
+    if(!parse_statement(p)) return false;
+    return parse_statement_next(p);
+}
+
+/*26. <while_stmt> -> WHILE expr DO EOL <block>*/
+bool parse_while(Parser *p){
+    if(!parser_expect_keyword(p, KW_WHILE, "'while'")) return false;
+
+    if(!parse_expression(p)) return false;
+
+    if(!parser_expect_keyword(p, KW_DO, "'do'")) return false;
+
+    if(!parser_expect(p, TOKEN_EOL, "end of line")) return false;
+
+    if(!parse_block(p))return false;
+    return true;
+}
+
+/* 27. <if_stmt> -> IF expr THEN EOL <block> <opt_else> PREDICT: { IF } */ 
+bool parse_if(Parser *p){
+    if(!parser_expect_keyword(p, KW_IF, "'if'")) return false;
+
+    if(!parse_expression(p)) return false;
+
+    if(!parser_expect_keyword(p, KW_THEN, "'then'")) return false;
+
+    if(!parser_expect(p, TOKEN_EOL, "end of line")) return false;
+
+    if(!parse_block(p)) return false;
+
+    if(!parse_opt_else(p)) return false;
+
+    return true;
+}
+
+/*
+    28. <opt_else> -> ELSE <else_tail>  PREDICT: { ELSE }
+    29. <opt_else> -> epsilon           PREDICT: { VAR, VAL, WHILE, IF, RETURN, ID, INT_LIT, DOUBLE_LIT, STRING_LIT, LEFT_PAREN, MINUS, DEDENT }
+*/
+bool parse_opt_else(Parser *p){
+    if(check_keyword(p, KW_ELSE)){
+        advance(p);
+        return parse_else_tail(p);
+    }
+
+    return true;
+}
+/*
+    30. <else_tail> -> EOL <block> PREDICT: { EOL }
+    31. <else_tail> -> <if_stmt>   PREDICT: { IF } 
+*/
+bool parse_else_tail(Parser *p){
+    
+    if(check(p, TOKEN_EOL)){
+        advance(p);
+        if(!parse_block(p)) return false;
+        return true;
+    }
+
+    if(check_keyword(p, KW_IF)){
+        
+        return parse_if(p);
+    }
+
+    return syntax_error(p, "end of line or 'if'");
+}
+
+/* 
+    32. <statement> -> RETURN <opt_expr> <stmt_end>   PREDICT: { RETURN }
+   33. <opt_expr>   -> expr     PREDICT: { ID, INT_LIT, DOUBLE_LIT, STRING_LIT, LEFT_PAREN, MINUS }
+   34. <opt_expr>   -> ε        PREDICT: { EOL, SEMICOLON } 
+*/
+bool parse_return(Parser *p) {
+    if(!parser_expect_keyword(p, KW_RETURN, "'return'")) return false;
+
+    if(check(p, TOKEN_IDENTIFIER) || is_expr_start(p)) {
+        if(!parse_expression(p)) return false;
+    }
+
+    return parse_stmt_end(p);
+}
+
+/* 
+    35. <statement> -> ID <id_tail> <stmt_end>   PREDICT: { ID }
+    36. <id_tail>   -> ASSIGN expr                PREDICT: { ASSIGN }
+    37. <id_tail>   -> <expr_rest>                PREDICT: { LEFT_PAREN, DOT, operators, EOL, SEMICOLON } 
+*/
+bool parse_id_statement(Parser *p){
+    if(!check(p, TOKEN_IDENTIFIER)) return syntax_error(p, "identifier");
+    position pos = {p->current.line, p->current.column};
+    char *name = take_string(p);
+    advance(p);
+
+    if(check_operator(p, OP_ASSIGN)) { 
+        advance(p);
+        if(!parse_expression(p)) {
+            free(name);
+            return false;
+        }
+        free(name);   // TODO: put into assign AST node
+        return parse_stmt_end(p);
+    }
+
+    /* 37. call / member / expression starting with ID (takes ownership of name) */
+    if(!parse_expression_rest(p, name, pos)) return false;
+    return parse_stmt_end(p);
+}
+
+/* 
+    39. <function_body> -> EOL <block>   PREDICT: { EOL }
+    40. <function_body> -> expr EOL      PREDICT: { ID, INT_LIT, DOUBLE_LIT, STRING_LIT, LEFT_PAREN, MINUS } 
+*/
+bool parse_function_body(Parser *p){
+    if(check(p, TOKEN_EOL)) {
+        advance(p);
+        return parse_block(p);
+    }
+    if(check(p, TOKEN_IDENTIFIER) || is_expr_start(p)) {
+        if(!parse_expression(p)) return false;
+        if(check(p, TOKEN_EOF)) return true;   /* last line of file without LF */
+        return parser_expect(p, TOKEN_EOL, "end of line");
+    }
+    return syntax_error(p, "end of line or expression");
 }
