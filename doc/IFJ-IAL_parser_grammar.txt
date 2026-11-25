@@ -2,7 +2,7 @@
 2.  <prolog>      	    -> IMPORT ID DOT MUL EOL
 3.  <definitions> 	    -> <function> <definitions>      		        PREDICT: { DEF, AT_MAIN }
 4.  <definitions>	    -> ε                             		        PREDICT: { EOF }
-5.  <function> 		    -> <opt_main> DEF ID LEFT_PAREN <parameters> RIGHT_PAREN <opt_type> ASSIGN <function_body>
+5.  <function> 		    -> <opt_main> DEF ID <param_lists> <opt_type> ASSIGN <function_body>
 5.1 <opt_main>		    -> AT_MAIN <opt_eol>				            PREDICT: { AT_MAIN }
 5.2 <opt_main>		    -> epsilon					                    PREDICT: { DEF }
 5.3 <opt_eol>		    -> EOL						                    PREDICT: { EOL }
@@ -20,30 +20,79 @@
 16. <parameters_next>	-> epsilon					                    PREDICT: { RIGHT_PAREN }
 17. <parameter> 	    -> ID COLON <type>
 18. <block>		        -> INDENT <statement> <statement_next> DEDENT
-19. <statement_next>	-> <statement> <statement_next>			        PREDICT: { VAR, VAL, WHILE, IF, RETURN, ID, INT_LIT, DOUBLE_LIT, STRING_LIT, LEFT_PAREN, MINUS }
+19. <statement_next>	-> <statement> <statement_next>			        PREDICT: { VAR, VAL, WHILE, IF, FOR, RETURN, ID, INT_LIT, DOUBLE_LIT, STRING_LIT, TRUE, FALSE, LEFT_PAREN, ISTRING_BEGIN }
 20. <statement_next> 	-> epsilon 					                    PREDICT:{ DEDENT } 
 21. <statement>		    -> <var_def> <stmt_end>                         PREDICT: { VAR, VAL }
-22. <var_def>		    -> VAR ID <opt_type> ASSIGN expr		        PREDICT: { VAR }
-23. <var_def>		    -> VAL ID <opt_type> ASSIGN expr		        PREDICT: { VAL }
+22. <var_def>		    -> VAR ID <opt_type> ASSIGN <rhs>		        PREDICT: { VAR }
+23. <var_def>		    -> VAL ID <opt_type> ASSIGN <rhs>		        PREDICT: { VAL }
 24. <statement>         -> <while_stmt>                                 PREDICT: { WHILE }
 25. <statement>         -> <if_stmt>                                    PREDICT: { IF }
 26. <while_stmt>        -> WHILE expr DO EOL <block>
-27. <if_stmt>           -> IF expr THEN EOL <block> <opt_else>          PREDICT: { IF }
+27. <if_stmt>           -> IF expr THEN <branch_body> <opt_else>        PREDICT: { IF }
 28. <opt_else>          -> ELSE <else_tail>                             PREDICT: { ELSE }
-29. <opt_else>          -> epsilon                                      PREDICT: { VAR, VAL, WHILE, IF, RETURN, ID, INT_LIT, DOUBLE_LIT, STRING_LIT, LEFT_PAREN, MINUS, DEDENT }
-30. <else_tail>         -> EOL <block>                                  PREDICT: { EOL }
+29. <opt_else>          -> epsilon                                      PREDICT: { VAR, VAL, WHILE, IF, FOR, RETURN, ID, INT_LIT, DOUBLE_LIT, STRING_LIT, TRUE, FALSE, LEFT_PAREN, ISTRING_BEGIN, DEDENT }
+30. <else_tail>         -> <branch_body>                                PREDICT: { EOL, RETURN, ID, INT_LIT, DOUBLE_LIT, STRING_LIT, TRUE, FALSE, LEFT_PAREN, MINUS, NOT, ISTRING_BEGIN }
 31. <else_tail>         -> <if_stmt>                                    PREDICT: { IF } 
 32. <statement>         -> RETURN <opt_expr> <stmt_end>                 PREDICT: { RETURN }
-33. <opt_expr>          -> expr                                         PREDICT: { ID, INT_LIT, DOUBLE_LIT, STRING_LIT, LEFT_PAREN, MINUS }
-34. <opt_expr>          -> epsilon                                      PREDICT: { EOL, SEMICOLON }
+33. <opt_expr>          -> expr                                         PREDICT: { ID, INT_LIT, DOUBLE_LIT, STRING_LIT, TRUE, FALSE, LEFT_PAREN, MINUS, NOT, IF, ISTRING_BEGIN }
+34. <opt_expr>          -> epsilon                                      PREDICT: { EOL, SEMICOLON, ELSE }
 35. <statement>         -> ID <id_tail> <stmt_end>                      PREDICT: { ID }
-36. <id_tail>           -> ASSIGN expr                                  PREDICT: { ASSIGN }
-37. <id_tail>           -> <expr_rest>                                  PREDICT: { LEFT_PAREN, DOT, PLUS, MINUS, MUL, DIV, LESS, ..., EOL, SEMICOLON }
-38. <statement>         -> expr <stmt_end>                              PREDICT: {INT_LIT,  DOUBLE_LIT, STRING_LIT, LEFT_PAREN, MINUS }
+36. <id_tail>           -> ASSIGN <rhs>                                 PREDICT: { ASSIGN }
+37. <id_tail>           -> <expr_rest>                                  PREDICT: { LEFT_PAREN, DOT, PLUS, MINUS, MUL, DIV, LESS, LESS_EQUAL, GREATER, GREATER_EQUAL, EQUAL, NOT_EQUAL, AND, OR, EOL, SEMICOLON, ELSE }
+38. <statement>         -> expr <stmt_end>                              PREDICT: { INT_LIT, DOUBLE_LIT, STRING_LIT, TRUE, FALSE, LEFT_PAREN, ISTRING_BEGIN }
 39. <function_body>     -> EOL <block>                                  PREDICT: { EOL }
-40. <function_body>     -> expr EOL                                     PREDICT: { ID, INT_LIT, DOUBLE_LIT, STRING_LIT, LEFT_PAREN, MINUS }
+40. <function_body>     -> expr EOL                                     PREDICT: { ID, INT_LIT, DOUBLE_LIT, STRING_LIT, TRUE, FALSE, LEFT_PAREN, MINUS, NOT, IF, ISTRING_BEGIN }
 41. <stmt_end>          -> EOL                                          PREDICT: { EOL }
 42. <stmt_end>          -> SEMICOLON                                    PREDICT: { SEMICOLON }
 43. <param_after_comma> -> <parameter> <parameters_next>                PREDICT: { ID }
 44. <param_after_comma> -> epsilon                                      PREDICT: { RIGHT_PAREN }
-
+45. <param_lists>       -> LEFT_PAREN <parameters> RIGHT_PAREN <param_lists>        PREDICT: { LEFT_PAREN }
+46. <param_lists>       -> ε                                            PREDICT: { COLON, ASSIGN  }
+47. <definitions>       -> <extension> <definitions>                    PREDICT: { EXTENSION }
+48. <extension>         -> EXTENSION LEFT_PAREN <parameter> RIGHT_PAREN EOL INDENT <method> <methods_next> DEDENT
+49. <method>            -> DEF ID <param_lists> <opt_type> ASSIGN <function_body>
+50. <methods_next>      -> <method> <methods_next>                      PREDICT: { DEF }
+51. <methods_next>      -> ε                                            PREDICT: { DEDENT }
+52. <type>              -> LEFT_PAREN <type_list> RIGHT_PAREN BIG_ARR <type>     PREDICT: { LEFT_PAREN }
+53. <type_list>         -> <type> <type_next>                           PREDICT: { INT, DOUBLE, STRING, UNIT, BOOLEAN, LEFT_PAREN }
+54. <type_list>         -> ε                                            PREDICT: { RIGHT_PAREN }
+55. <type_next>         -> COMMA <type> <type_next>                     PREDICT: { COMMA }
+56. <type_next>         -> ε                                            PREDICT: { RIGHT_PAREN }
+57. <branch_body>       -> EOL <block>                                  PREDICT: { EOL }
+58. <branch_body>       -> RETURN <opt_expr>                            PREDICT: { RETURN }
+59. <branch_body>       -> ID <id_tail>                                 PREDICT: { ID }
+60. <branch_body>       -> expr                                         PREDICT: { INT_LIT, DOUBLE_LIT, STRING_LIT, TRUE, FALSE, LEFT_PAREN, MINUS, NOT, ISTRING_BEGIN }
+61. <statement>         -> <for_stmt> <stmt_end>                        PREDICT: { FOR }
+62. <for_stmt>          -> FOR <for_header> DO <branch_body>
+63. <for_header>        -> <generator> <guards>                         PREDICT: { ID }
+64. <for_header>        -> EOL INDENT <generator> EOL <guard_lines> DEDENT       PREDICT: { EOL }
+65. <generator>         -> ID LEFT_ARR expr <range>
+66. <range>             -> TO expr <opt_by>                             PREDICT: { TO }
+67. <range>             -> UNTIL expr                                   PREDICT: { UNTIL }
+68. <opt_by>            -> BY expr                                      PREDICT: { BY }
+69. <opt_by>            -> ε                                            PREDICT: { IF, DO, EOL }
+70. <guards>            -> IF expr <guards>                             PREDICT: { IF }
+71. <guards>            -> ε                                            PREDICT: { DO }
+72. <guard_lines>       -> IF expr EOL <guard_lines>                    PREDICT: { IF }
+73. <guard_lines>       -> ε                                            PREDICT: { DEDENT }
+74. <rhs>               -> expr                                         PREDICT: { ID, INT_LIT, DOUBLE_LIT, STRING_LIT, TRUE, FALSE, LEFT_PAREN, MINUS, NOT, IF, ISTRING_BEGIN }
+75. <rhs>               -> EOL INDENT expr <stmt_end> DEDENT            PREDICT: { EOL }
+76. <stmt_end>          -> ε                                            PREDICT: { VAR, VAL, WHILE, IF, FOR, RETURN, ID, INT_LIT, DOUBLE_LIT, STRING_LIT, TRUE, FALSE, LEFT_PAREN, ISTRING_BEGIN, DEDENT }
+77. <lambda>            -> LEFT_PAREN <parameters> RIGHT_PAREN BIG_ARR <lambda_body>
+78. <lambda_body>       -> EOL <block>                                  PREDICT: { EOL }
+79. <lambda_body>       -> expr                                         PREDICT: { ID, INT_LIT, DOUBLE_LIT, STRING_LIT, TRUE, FALSE, LEFT_PAREN, MINUS, NOT, IF, ISTRING_BEGIN }
+80. <if_expr>           -> IF expr THEN <branch_body> ELSE <else_tail>
+81. <istring>           -> ISTRING_BEGIN <istring_parts> ISTRING_END
+82. <istring_parts>     -> ISTRING_PART <istring_parts>                 PREDICT: { ISTRING_PART }
+83. <istring_parts>     -> ISTRING_ID <istring_parts>                   PREDICT: { ISTRING_ID }
+84. <istring_parts>     -> ISTRING_EXPR_BEGIN expr ISTRING_EXPR_END <istring_parts>   PREDICT: { ISTRING_EXPR_BEGIN }
+85. <istring_parts>     -> ε                                            PREDICT: { ISTRING_END }
+86. <postfix>           -> LEFT_PAREN <arguments> RIGHT_PAREN <postfix> PREDICT: { LEFT_PAREN }
+87. <postfix>           -> DOT ID <postfix>                             PREDICT: { DOT }
+88. <postfix>           -> ε                                            PREDICT: { PLUS, MINUS, MUL, DIV, LESS, LESS_EQUAL, GREATER, GREATER_EQUAL, EQUAL, NOT_EQUAL, AND, OR, RIGHT_PAREN, COMMA, EOL, SEMICOLON, EOF, THEN, DO, ELSE, TO, UNTIL, BY, IF, ISTRING_EXPR_END }
+89. <arguments>         -> expr <arguments_next>                        PREDICT: { ID, INT_LIT, DOUBLE_LIT, STRING_LIT, TRUE, FALSE, LEFT_PAREN, MINUS, NOT, IF, ISTRING_BEGIN }
+90. <arguments>         -> ε                                            PREDICT: { RIGHT_PAREN }
+91. <arguments_next>    -> COMMA <arg_after_comma>                      PREDICT: { COMMA }
+92. <arguments_next>    -> ε                                            PREDICT: { RIGHT_PAREN }
+93. <arg_after_comma>   -> expr <arguments_next>                        PREDICT: { ID, INT_LIT, DOUBLE_LIT, STRING_LIT, TRUE, FALSE, LEFT_PAREN, MINUS, NOT, IF, ISTRING_BEGIN }
+94. <arg_after_comma>   -> ε                                            PREDICT: { RIGHT_PAREN }
