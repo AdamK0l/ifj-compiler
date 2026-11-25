@@ -18,6 +18,7 @@
 typedef struct {
     Scanner *scanner;
     Token current;
+    TokenType prev_type;   /* type of the last consumed token  */
     ErrorCode error;
 } Parser;
 
@@ -28,6 +29,7 @@ position current_pos(Parser *p);
 bool check(Parser *p, TokenType type);
 bool check_keyword(Parser *p, KeywordType kw);
 bool check_operator(Parser *p, OperatorType op);
+bool check_id(Parser *p, const char *name);
 bool is_expr_start(Parser *p);
 bool is_stmt_expr_start(Parser *p);
 
@@ -41,7 +43,8 @@ bool parser_expect_operator(Parser *p, OperatorType op, const char *expected);
 bool parse_program(Parser *p, AstProgram *program);
 bool parse_prolog(Parser *p);
 bool parse_definitions(Parser *p, AstProgram *program);
-AstFunction *parse_function(Parser *p);
+AstFunction *parse_function(Parser *p, bool allow_main);
+AstExtension *parse_extension(Parser *p);
 bool parse_opt_main(Parser *p, bool *is_main);
 bool parse_parameters(Parser *p, AstParameterList *list);
 bool parse_parameters_next(Parser *p, AstParameterList *list);
@@ -49,6 +52,7 @@ bool parse_parameter(Parser *p, AstParameterList *list);
 bool parse_opt_type(Parser *p, AstType **out);
 AstType *parse_type(Parser *p);
 AstBLOCK *parse_function_body(Parser *p);
+AstType *parse_function_type(Parser *p);
 
 /* ==================== Blocks and statements ==================== */
 AstBLOCK *parse_block(Parser *p);
@@ -57,9 +61,12 @@ bool parse_statement_next(Parser *p, AstStatementList *list);
 bool parse_stmt_end(Parser *p);
 AstStatement *parse_var_def(Parser *p);
 AstStatement *parse_while(Parser *p);
-AstExpression *parse_if(Parser *p);
-bool parse_opt_else(Parser *p, AstBLOCK **out);
-AstBLOCK *parse_else_tail(Parser *p);
+AstExpression *parse_if(Parser *p, bool require_else);
+bool parse_opt_else(Parser *p, AstBLOCK **out, bool require_else);
+AstBLOCK *parse_else_tail(Parser *p, bool require_else);
+AstBLOCK *parse_branch_body(Parser *p);
+AstStatement *parse_for(Parser *p);
+AstExpression *parse_rhs(Parser *p);
 AstStatement *parse_return(Parser *p);
 AstStatement *parse_id_statement(Parser *p);
 

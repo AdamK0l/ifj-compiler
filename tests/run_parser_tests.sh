@@ -21,3 +21,9 @@ echo "bad_parameters (expected 2):"
 
 echo "ok_factorial (expected 0):"
 ./parser_test < tests/ok_factorial.ifj
+# AI-generated (Claude, Anthropic). Prompt (summary): "Add a loop that runs the parser on every extension example in tests/ext."
+# Extension examples from the specification (all expected 0)
+for f in tests/ext/*.ifj; do
+    echo "$(basename "$f") (expected 0):"
+    ./parser_test < "$f"
+done
