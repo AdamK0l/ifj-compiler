@@ -4,24 +4,24 @@
 4.  <definitions>	    -> ε                             		        PREDICT: { EOF }
 5.  <function> 		    -> <opt_main> DEF ID <param_lists> <opt_type> ASSIGN <function_body>
 5.1 <opt_main>		    -> AT_MAIN <opt_eol>				            PREDICT: { AT_MAIN }
-5.2 <opt_main>		    -> epsilon					                    PREDICT: { DEF }
+5.2 <opt_main>		    -> ε					                        PREDICT: { DEF }
 5.3 <opt_eol>		    -> EOL						                    PREDICT: { EOL }
-5.4 <opt_eol>		    -> epsilon					                    PREDICT: { DEF }
+5.4 <opt_eol>		    -> ε					                        PREDICT: { DEF }
 6.  <opt_type>		    -> COLON <type>					                PREDICT: { COLON }
-7.  <opt_type>		    -> epsilon					                    PREDICT: { ASSIGN }
+7.  <opt_type>		    -> ε					                        PREDICT: { ASSIGN }
 8.  <type>		        -> INT						                    PREDICT: { INT }
 9.  <type>		        -> DOUBLE					                    PREDICT: { DOUBLE }
 10. <type>		        -> STRING					                    PREDICT: { STRING }
 11. <type>		        -> UNIT						                    PREDICT: { UNIT }
 12. <type>		        -> BOOLEAN					                    PREDICT: { BOOLEAN }
 13. <parameters>	    -> <parameter> <parameters_next>		        PREDICT: { ID }
-14. <parameters>	    -> epsilon					                    PREDICT: { RIGHT_PAREN }
+14. <parameters>	    -> ε					                        PREDICT: { RIGHT_PAREN }
 15. <parameters_next>	-> COMMA <param_after_comma>        		    PREDICT: { COMMA }
-16. <parameters_next>	-> epsilon					                    PREDICT: { RIGHT_PAREN }
+16. <parameters_next>	-> ε					                        PREDICT: { RIGHT_PAREN }
 17. <parameter> 	    -> ID COLON <type>
 18. <block>		        -> INDENT <statement> <statement_next> DEDENT
 19. <statement_next>	-> <statement> <statement_next>			        PREDICT: { VAR, VAL, WHILE, IF, FOR, RETURN, ID, INT_LIT, DOUBLE_LIT, STRING_LIT, TRUE, FALSE, LEFT_PAREN, ISTRING_BEGIN }
-20. <statement_next> 	-> epsilon 					                    PREDICT:{ DEDENT } 
+20. <statement_next> 	-> ε 					                        PREDICT:{ DEDENT } 
 21. <statement>		    -> <var_def> <stmt_end>                         PREDICT: { VAR, VAL }
 22. <var_def>		    -> VAR ID <opt_type> ASSIGN <rhs>		        PREDICT: { VAR }
 23. <var_def>		    -> VAL ID <opt_type> ASSIGN <rhs>		        PREDICT: { VAL }
@@ -30,12 +30,12 @@
 26. <while_stmt>        -> WHILE expr DO EOL <block>
 27. <if_stmt>           -> IF expr THEN <branch_body> <opt_else>        PREDICT: { IF }
 28. <opt_else>          -> ELSE <else_tail>                             PREDICT: { ELSE }
-29. <opt_else>          -> epsilon                                      PREDICT: { VAR, VAL, WHILE, IF, FOR, RETURN, ID, INT_LIT, DOUBLE_LIT, STRING_LIT, TRUE, FALSE, LEFT_PAREN, ISTRING_BEGIN, DEDENT }
+29. <opt_else>          -> ε                                            PREDICT: { VAR, VAL, WHILE, IF, FOR, RETURN, ID, INT_LIT, DOUBLE_LIT, STRING_LIT, TRUE, FALSE, LEFT_PAREN, ISTRING_BEGIN, DEDENT }
 30. <else_tail>         -> <branch_body>                                PREDICT: { EOL, RETURN, ID, INT_LIT, DOUBLE_LIT, STRING_LIT, TRUE, FALSE, LEFT_PAREN, MINUS, NOT, ISTRING_BEGIN }
 31. <else_tail>         -> <if_stmt>                                    PREDICT: { IF } 
 32. <statement>         -> RETURN <opt_expr> <stmt_end>                 PREDICT: { RETURN }
 33. <opt_expr>          -> expr                                         PREDICT: { ID, INT_LIT, DOUBLE_LIT, STRING_LIT, TRUE, FALSE, LEFT_PAREN, MINUS, NOT, IF, ISTRING_BEGIN }
-34. <opt_expr>          -> epsilon                                      PREDICT: { EOL, SEMICOLON, ELSE }
+34. <opt_expr>          -> ε                                            PREDICT: { EOL, SEMICOLON, ELSE }
 35. <statement>         -> ID <id_tail> <stmt_end>                      PREDICT: { ID }
 36. <id_tail>           -> ASSIGN <rhs>                                 PREDICT: { ASSIGN }
 37. <id_tail>           -> <expr_rest>                                  PREDICT: { LEFT_PAREN, DOT, PLUS, MINUS, MUL, DIV, LESS, LESS_EQUAL, GREATER, GREATER_EQUAL, EQUAL, NOT_EQUAL, AND, OR, EOL, SEMICOLON, ELSE }
@@ -45,7 +45,7 @@
 41. <stmt_end>          -> EOL                                          PREDICT: { EOL }
 42. <stmt_end>          -> SEMICOLON                                    PREDICT: { SEMICOLON }
 43. <param_after_comma> -> <parameter> <parameters_next>                PREDICT: { ID }
-44. <param_after_comma> -> epsilon                                      PREDICT: { RIGHT_PAREN }
+44. <param_after_comma> -> ε                                            PREDICT: { RIGHT_PAREN }
 45. <param_lists>       -> LEFT_PAREN <parameters> RIGHT_PAREN <param_lists>        PREDICT: { LEFT_PAREN }
 46. <param_lists>       -> ε                                            PREDICT: { COLON, ASSIGN  }
 47. <definitions>       -> <extension> <definitions>                    PREDICT: { EXTENSION }
