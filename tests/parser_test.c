@@ -1,17 +1,43 @@
-/* Parser test driver: parses the IFJ26 source on stdin and returns the error code. 
- * Parser test driver: parses the IFJ26 source on stdin and prints the result code.
- * Build and run all parser tests: bash tests/run_parser_tests.sh
- * */
-#include "parser_internal.h"
-#include <stdio.h>
+/**
+ * Project: IFJ26 / IAL compiler
+ * File: parser_test.c
+ * Authors:
+ *   Peter Takáč (xtakacp00)
+ *
+ * Parser test driver: reads a program from stdin, prints the parser result.
+ * Usage: ./parser_test < file.ifj          (result only)
+ *        ./parser_test --dump < file.ifj   (result + AST dump)
+ */
 
-int main(void) {
+#include "ast.h"
+#include "parser.h"
+#include "scanner.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+int main(int argc, char **argv) {
+    bool dump = (argc > 1 && strcmp(argv[1], "--dump") == 0);
+
     Scanner scanner;
-    if (scanner_init(&scanner, stdin) != ERR_OK) {
-        return ERR_INTERNAL;
+    ErrorCode err = scanner_init(&scanner, stdin);
+    if (err != ERR_OK) {
+        printf("parser result: %d\n", err);
+        return err;
     }
-    ErrorCode err = parser_run(&scanner);
+
+    AstProgram *program = NULL;
+    err = parser_run(&scanner, &program);
     scanner_destroy(&scanner);
+
+    if (err == ERR_OK && dump) {
+        ast_dump_program(stdout, program);
+    }
+    if (program != NULL) {
+        ast_free_program(program);
+        free(program);
+    }
+
     printf("parser result: %d\n", err);
     return err;
 }

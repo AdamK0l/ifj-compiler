@@ -18,3 +18,6 @@ echo "ok_parameters (expected 0):"
 
 echo "bad_parameters (expected 2):"
 ./parser_test < tests/bad_parameters.ifj
+
+echo "ok_factorial (expected 0):"
+./parser_test < tests/ok_factorial.ifj
