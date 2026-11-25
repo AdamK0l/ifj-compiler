@@ -1,0 +1,54 @@
+LL table for the IFJ26 parser
+Format: <nonterminal> : TOKEN -> rule number, TOKEN -> rule number, ...
+
+<program>           : IMPORT -> 1
+<prolog>            : IMPORT -> 2
+<definitions>       : DEF -> 3, AT_MAIN -> 3, EXTENSION -> 47, EOF -> 4
+<function>          : AT_MAIN -> 5, DEF -> 5
+<opt_main>          : AT_MAIN -> 5.1, DEF -> 5.2
+<opt_eol>           : EOL -> 5.3, DEF -> 5.4
+<opt_type>          : COLON -> 6, ASSIGN -> 7
+<type>              : INT -> 8, DOUBLE -> 9, STRING -> 10, UNIT -> 11, BOOLEAN -> 12, LEFT_PAREN -> 52
+<parameters>        : ID -> 13, RIGHT_PAREN -> 14
+<parameters_next>   : COMMA -> 15, RIGHT_PAREN -> 16
+<param_after_comma> : ID -> 43, RIGHT_PAREN -> 44
+<parameter>         : ID -> 17
+<param_lists>       : LEFT_PAREN -> 45, COLON -> 46, ASSIGN -> 46
+<extension>         : EXTENSION -> 48
+<method>            : DEF -> 49
+<methods_next>      : DEF -> 50, DEDENT -> 51
+<type_list>         : INT -> 53, DOUBLE -> 53, STRING -> 53, UNIT -> 53, BOOLEAN -> 53, LEFT_PAREN -> 53, RIGHT_PAREN -> 54
+<type_next>         : COMMA -> 55, RIGHT_PAREN -> 56
+<function_body>     : EOL -> 39, ID -> 40, INT_LIT -> 40, DOUBLE_LIT -> 40, STRING_LIT -> 40, TRUE -> 40, FALSE -> 40, LEFT_PAREN -> 40, MINUS -> 40, NOT -> 40, IF -> 40, ISTRING_BEGIN -> 40
+<block>             : INDENT -> 18
+<statement_next>    : VAR -> 19, VAL -> 19, WHILE -> 19, IF -> 19, FOR -> 19, RETURN -> 19, ID -> 19, INT_LIT -> 19, DOUBLE_LIT -> 19, STRING_LIT -> 19, TRUE -> 19, FALSE -> 19, LEFT_PAREN -> 19, ISTRING_BEGIN -> 19, DEDENT -> 20
+<statement>         : VAR -> 21, VAL -> 21, WHILE -> 24, IF -> 25, RETURN -> 32, ID -> 35, INT_LIT -> 38, DOUBLE_LIT -> 38, STRING_LIT -> 38, TRUE -> 38, FALSE -> 38, LEFT_PAREN -> 38, ISTRING_BEGIN -> 38, FOR -> 61
+<stmt_end>          : EOL -> 41, SEMICOLON -> 42, VAR -> 76, VAL -> 76, WHILE -> 76, IF -> 76, FOR -> 76, RETURN -> 76, ID -> 76, INT_LIT -> 76, DOUBLE_LIT -> 76, STRING_LIT -> 76, TRUE -> 76, FALSE -> 76, LEFT_PAREN -> 76, ISTRING_BEGIN -> 76, DEDENT -> 76
+<var_def>           : VAR -> 22, VAL -> 23
+<rhs>               : ID -> 74, INT_LIT -> 74, DOUBLE_LIT -> 74, STRING_LIT -> 74, TRUE -> 74, FALSE -> 74, LEFT_PAREN -> 74, MINUS -> 74, NOT -> 74, IF -> 74, ISTRING_BEGIN -> 74, EOL -> 75
+<while_stmt>        : WHILE -> 26
+<if_stmt>           : IF -> 27
+<opt_else>          : ELSE -> 28, VAR -> 29, VAL -> 29, WHILE -> 29, IF -> 29, FOR -> 29, RETURN -> 29, ID -> 29, INT_LIT -> 29, DOUBLE_LIT -> 29, STRING_LIT -> 29, TRUE -> 29, FALSE -> 29, LEFT_PAREN -> 29, ISTRING_BEGIN -> 29, DEDENT -> 29
+<else_tail>         : EOL -> 30, RETURN -> 30, ID -> 30, INT_LIT -> 30, DOUBLE_LIT -> 30, STRING_LIT -> 30, TRUE -> 30, FALSE -> 30, LEFT_PAREN -> 30, MINUS -> 30, NOT -> 30, ISTRING_BEGIN -> 30, IF -> 31
+<branch_body>       : EOL -> 57, RETURN -> 58, ID -> 59, INT_LIT -> 60, DOUBLE_LIT -> 60, STRING_LIT -> 60, TRUE -> 60, FALSE -> 60, LEFT_PAREN -> 60, MINUS -> 60, NOT -> 60, ISTRING_BEGIN -> 60
+<for_stmt>          : FOR -> 62
+<for_header>        : ID -> 63, EOL -> 64
+<generator>         : ID -> 65
+<range>             : TO -> 66, UNTIL -> 67
+<opt_by>            : BY -> 68, IF -> 69, DO -> 69, EOL -> 69
+<guards>            : IF -> 70, DO -> 71
+<guard_lines>       : IF -> 72, DEDENT -> 73
+<opt_expr>          : ID -> 33, INT_LIT -> 33, DOUBLE_LIT -> 33, STRING_LIT -> 33, TRUE -> 33, FALSE -> 33, LEFT_PAREN -> 33, MINUS -> 33, NOT -> 33, IF -> 33, ISTRING_BEGIN -> 33, EOL -> 34, SEMICOLON -> 34, ELSE -> 34
+<id_tail>           : ASSIGN -> 36, LEFT_PAREN -> 37, DOT -> 37, PLUS -> 37, MINUS -> 37, MUL -> 37, DIV -> 37, LESS -> 37, LESS_EQUAL -> 37, GREATER -> 37, GREATER_EQUAL -> 37, EQUAL -> 37, NOT_EQUAL -> 37, AND -> 37, OR -> 37, EOL -> 37, SEMICOLON -> 37, ELSE -> 37
+
+Operands:
+
+<lambda>            : LEFT_PAREN -> 77
+<lambda_body>       : EOL -> 78, ID -> 79, INT_LIT -> 79, DOUBLE_LIT -> 79, STRING_LIT -> 79, TRUE -> 79, FALSE -> 79, LEFT_PAREN -> 79, MINUS -> 79, NOT -> 79, IF -> 79, ISTRING_BEGIN -> 79
+<if_expr>           : IF -> 80
+<istring>           : ISTRING_BEGIN -> 81
+<istring_parts>     : ISTRING_PART -> 82, ISTRING_ID -> 83, ISTRING_EXPR_BEGIN -> 84, ISTRING_END -> 85
+<postfix>           : LEFT_PAREN -> 86, DOT -> 87, PLUS -> 88, MINUS -> 88, MUL -> 88, DIV -> 88, LESS -> 88, LESS_EQUAL -> 88, GREATER -> 88, GREATER_EQUAL -> 88, EQUAL -> 88, NOT_EQUAL -> 88, AND -> 88, OR -> 88, RIGHT_PAREN -> 88, COMMA -> 88, EOL -> 88, SEMICOLON -> 88, EOF -> 88, THEN -> 88, DO -> 88, ELSE -> 88, TO -> 88, UNTIL -> 88, BY -> 88, IF -> 88, ISTRING_EXPR_END -> 88
+<arguments>         : ID -> 89, INT_LIT -> 89, DOUBLE_LIT -> 89, STRING_LIT -> 89, TRUE -> 89, FALSE -> 89, LEFT_PAREN -> 89, MINUS -> 89, NOT -> 89, IF -> 89, ISTRING_BEGIN -> 89, RIGHT_PAREN -> 90
+<arguments_next>    : COMMA -> 91, RIGHT_PAREN -> 92
+<arg_after_comma>   : ID -> 93, INT_LIT -> 93, DOUBLE_LIT -> 93, STRING_LIT -> 93, TRUE -> 93, FALSE -> 93, LEFT_PAREN -> 93, MINUS -> 93, NOT -> 93, IF -> 93, ISTRING_BEGIN -> 93, RIGHT_PAREN -> 94

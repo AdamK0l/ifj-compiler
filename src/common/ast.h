@@ -9,25 +9,23 @@
 #ifndef AST_H
 #define AST_H
 
-#include <stddef.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
-
-//Position in source code
-typedef struct{
+// Position in source code
+typedef struct {
     size_t line;
     size_t column;
 } position;
 
-//Strings from source code
-typedef struct{
+// Strings from source code
+typedef struct {
     char *data;
     size_t length;
 } AstString;
 
-
-typedef enum{
+typedef enum {
     AST_TYPE_INT,
     AST_TYPE_DOUBLE,
     AST_TYPE_STRING,
@@ -37,7 +35,7 @@ typedef enum{
     AST_TYPE_ANY
 } AstTypeKind;
 
-typedef enum{
+typedef enum {
     AST_ADD,
     AST_SUBTRACT,
     AST_MULTIPLY,
@@ -49,19 +47,14 @@ typedef enum{
     AST_LESS_EQUAL,
     AST_GREATER,
     AST_GREATER_EQUAL,
-    
+
     AST_AND,
     AST_OR
 } AstBinaryOp;
 
-typedef enum{
-    AST_UNARY_PLUS,
-    AST_UNARY_MINUS,
-    AST_UNARY_NOT
-} AstUnaryOp;
+typedef enum { AST_UNARY_PLUS, AST_UNARY_MINUS, AST_UNARY_NOT } AstUnaryOp;
 
-
-typedef enum{
+typedef enum {
     AST_EXPR_INT,
     AST_EXPR_DOUBLE,
     AST_EXPR_STRING,
@@ -77,7 +70,7 @@ typedef enum{
     AST_EXPR_INTERPOLATED_STRING
 } AstExpressionKind;
 
-typedef enum{
+typedef enum {
     AST_STATEMENT_VARIABLE,
     AST_STATEMENT_ASSIGN,
     AST_STATEMENT_EXPRESSION,
@@ -87,34 +80,32 @@ typedef enum{
 } AstStatementKind;
 
 typedef struct AstStatement AstStatement;
-typedef struct AstBLOCK AstBLOCK; 
+typedef struct AstBLOCK AstBLOCK;
 typedef struct AstType AstType;
 
-struct AstType{
+struct AstType {
     AstTypeKind kind;
 
-    struct 
-    {
+    struct {
         AstType **parameters;
         size_t parameter_count;
         AstType *result;
     } function;
-    
 };
 
-typedef struct{
+typedef struct {
     char *name;
     AstType *type;
     position pos;
 } AstParameter;
 
-typedef struct{
+typedef struct {
     AstParameter *items;
     size_t count;
     size_t capacity;
 } AstParameterList;
 
-typedef struct{
+typedef struct {
     AstParameterList *items;
     size_t count;
     size_t capacity;
@@ -122,35 +113,32 @@ typedef struct{
 
 typedef struct AstExpression AstExpression;
 
-typedef enum{
-    AST_STRING_TEXT,
-    AST_STRING_EXPRESSION
-}AstStringPartKind;
+typedef enum { AST_STRING_TEXT, AST_STRING_EXPRESSION } AstStringPartKind;
 
-typedef struct{
+typedef struct {
     AstStringPartKind kind;
     position pos;
 
     union {
         AstString text;
         AstExpression *expression;
-    }data;
+    } data;
 
-}AstStringPart;
+} AstStringPart;
 
-typedef struct{
+typedef struct {
     AstExpression **items;
     size_t count;
     size_t capacity;
 } AstExpressionList;
 
-typedef struct{
+typedef struct {
     AstExpressionList *items;
     size_t count;
     size_t capacity;
 } AstArgumentList;
 
-struct AstExpression{
+struct AstExpression {
     AstExpressionKind kind;
     position pos;
     AstType *evaluated_type;
@@ -167,7 +155,7 @@ struct AstExpression{
             AstExpression *left;
             AstExpression *right;
         } binary;
-        
+
         struct {
             AstUnaryOp op;
             AstExpression *operand;
@@ -176,56 +164,55 @@ struct AstExpression{
         struct {
             AstExpression *callee;
             AstArgumentList arguments;
-        }call;
+        } call;
 
         struct {
             AstExpression *receiver;
             char *name;
         } member;
 
-        struct{
+        struct {
             AstExpression *condition;
             AstBLOCK *then_branch;
             AstBLOCK *else_branch;
-        }conditional;
+        } conditional;
 
-        struct{
+        struct {
             AstParameterList parameters;
             AstBLOCK *inside;
-        }lambda;
+        } lambda;
 
-        struct{
+        struct {
             AstStringPart *items;
             size_t count;
-        }interpolated_string;
+        } interpolated_string;
     } data;
-    
 };
 
-typedef struct{
+typedef struct {
     AstStatement **items;
     size_t count;
     size_t capacity;
 } AstStatementList;
 
-struct AstBLOCK{
+struct AstBLOCK {
     position pos;
     AstStatementList statements;
-} ;
+};
 
-struct AstStatement{
+struct AstStatement {
     AstStatementKind kind;
     position pos;
 
-    union{
-        struct{
+    union {
+        struct {
             char *name;
             bool is_changeable;
             AstType *declared_type;
             AstExpression *initializer;
-        }variable;
+        } variable;
 
-        struct{
+        struct {
             char *name;
             AstExpression *value;
         } assignment;
@@ -233,26 +220,24 @@ struct AstStatement{
         AstExpression *expression;
         AstExpression *return_value;
 
-        struct{
+        struct {
             AstExpression *condition;
             AstBLOCK *inside;
         } while_loop;
 
-        struct{
+        struct {
             char *variable_name;
             position variable_pos;
 
             AstExpression *from;
             AstExpression *to;
             bool inclusive;
-            
+
             AstExpression *step;
             AstBLOCK *inside;
             AstExpressionList guards;
-        }for_loop;
-    }data;
-
-    
+        } for_loop;
+    } data;
 };
 
 typedef struct {
@@ -261,37 +246,34 @@ typedef struct {
     bool is_main;
 
     AstParameterLists parameters;
-    AstType *return_type;   //NULL if no explicit type
+    AstType *return_type; // NULL if no explicit type
     AstBLOCK *inside;
-}AstFunction;
+} AstFunction;
 
-typedef struct{
+typedef struct {
     position pos;
     AstParameter receiver;
 
     AstFunction **methods;
     size_t method_count;
-}AstExtension;
+} AstExtension;
 
-typedef enum{
-    AST_DEF_FUNCTION,
-    AST_DEF_EXTENSION
-}AstDefinitionKind;
+typedef enum { AST_DEF_FUNCTION, AST_DEF_EXTENSION } AstDefinitionKind;
 
 typedef struct {
     AstDefinitionKind kind;
 
-    union{
+    union {
         AstFunction *function;
         AstExtension *extension;
-    }data;
-}AstDefinition;
+    } data;
+} AstDefinition;
 
 typedef struct {
     AstDefinition *items;
     size_t count;
     size_t capacity;
-}AstProgram;
+} AstProgram;
 
 /* ==================== Type Helper Functions ==================== */
 
@@ -366,5 +348,64 @@ void ast_free_extension(AstExtension *ext);
  * Recursively frees the entire AstProgram and all its definitions.
  */
 void ast_free_program(AstProgram *program);
+
+// Allocates memory 
+void *ast_alloc(size_t size);
+
+// Expression constructors
+AstExpression *ast_expr_create(AstExpressionKind kind, position pos);
+AstExpression *ast_expr_int(int32_t value, position pos);
+AstExpression *ast_expr_double(double value, position pos);
+AstExpression *ast_expr_unit(position pos);
+AstExpression *ast_expr_name(char *name, position pos);
+AstExpression *ast_expr_bool(bool value, position pos);
+AstExpression *ast_expr_string(char *data, size_t length, position pos);
+AstExpression *ast_expr_unary(AstUnaryOp op, AstExpression *operand, position pos);
+AstExpression *ast_expr_binary(AstBinaryOp op, AstExpression *left, AstExpression *right, position pos);
+
+/* AI-generated (Claude). Prompt: "Generate the declarations for the remaining constructors and list functions in the provided ast.c" */
+
+AstExpression *ast_expr_member(AstExpression *receiver, char *name, position pos);
+AstExpression *ast_expr_conditional(AstExpression *condition, AstBLOCK *then_branch,
+                                    AstBLOCK *else_branch, position pos);
+AstExpression *ast_expr_call(AstExpression *callee, position pos);
+AstExpression *ast_expr_lambda(AstBLOCK *inside, position pos);
+
+// Statement constructors
+AstStatement *ast_stmt_create(AstStatementKind kind, position pos);
+AstStatement *ast_stmt_variable(char *name, bool is_changeable, AstType *declared_type,
+                                AstExpression *initializer, position pos);
+AstStatement *ast_stmt_assign(char *name, AstExpression *value, position pos);
+AstStatement *ast_stmt_expression(AstExpression *expression, position pos);
+AstStatement *ast_stmt_return(AstExpression *return_value, position pos);
+AstStatement *ast_stmt_while(AstExpression *condition, AstBLOCK *inside, position pos);
+AstStatement *ast_stmt_for(char *variable_name, position variable_pos, AstExpression *from,
+                           AstExpression *to, bool inclusive, AstExpression *step,
+                           AstBLOCK *inside, position pos);
+
+// Block and function constructors
+AstBLOCK *ast_block_create(position pos);
+AstFunction *ast_function_create(bool is_main, char *name, AstType *return_type,
+                                 AstBLOCK *inside, position pos);
+
+// Adding to lists
+void ast_stmt_list_push(AstStatementList *list, AstStatement *stmt);
+void ast_expr_list_push(AstExpressionList *list, AstExpression *expr);
+void ast_parameter_list_push(AstParameterList *list, AstParameter param);
+AstParameterList *ast_parameter_lists_push(AstParameterLists *lists);
+AstExpressionList *ast_argument_lists_push(AstArgumentList *lists);
+void ast_definition_push(AstProgram *program, AstDefinition definition);
+
+
+/* ==================== Debug dump ==================== */
+/* AI-generated (Claude). Prompt: "declarations for ast_dump" */
+#include <stdio.h>
+
+void ast_dump_type(FILE *out, const AstType *type);
+void ast_dump_expression(FILE *out, const AstExpression *e, int depth);
+void ast_dump_statement(FILE *out, const AstStatement *s, int depth);
+void ast_dump_block(FILE *out, const AstBLOCK *block, int depth);
+void ast_dump_function(FILE *out, const AstFunction *f, int depth);
+void ast_dump_program(FILE *out, const AstProgram *program);
 
 #endif

@@ -1,0 +1,9 @@
+import ifj26.*
+
+@main def run(): Unit =
+    val name = "IFJ"
+    val n = 26
+    // IFJ27 costs $0
+    print(s"$name${n + 1} costs $$0")
+    print(s"""He said "hello", $name.
+Second line.""")
