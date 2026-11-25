@@ -77,6 +77,7 @@ pack: clean
 	[ -f rozsireni ] && cp rozsireni $(PACK_DIR)/ || true
 	[ -f dokumentace.pdf ] && cp dokumentace.pdf $(PACK_DIR)/ || true
 	[ -d tests ] && cp -r tests $(PACK_DIR)/ || true
+	find $(PACK_DIR) -name '.*' -delete
 	@# 3. Sanity check: verify that flattened sources compile cleanly in _pack/
 	@echo "==> Verifying build of flattened project..."
 	$(MAKE) -C $(PACK_DIR) clean

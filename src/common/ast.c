@@ -98,20 +98,22 @@ bool ast_type_equals(const AstType *a, const AstType *b) {
 
 const char *ast_type_to_string(AstTypeKind kind) {
     switch (kind) {
-    case AST_TYPE_INT:
-        return "Int";
-    case AST_TYPE_DOUBLE:
-        return "Double";
-    case AST_TYPE_STRING:
-        return "String";
-    case AST_TYPE_BOOLEAN:
-        return "Boolean";
-    case AST_TYPE_UNIT:
-        return "Unit";
-    case AST_TYPE_FUNCTION:
-        return "Function";
-    default:
-        return "Unknown";
+        case AST_TYPE_INT:
+            return "Int";
+        case AST_TYPE_DOUBLE:
+            return "Double";
+        case AST_TYPE_STRING:
+            return "String";
+        case AST_TYPE_BOOLEAN:
+            return "Boolean";
+        case AST_TYPE_UNIT:
+            return "Unit";
+        case AST_TYPE_FUNCTION:
+            return "Function";
+        case AST_TYPE_ANY:
+            return "Any";
+        default:
+            return "Unknown";
     }
 }
 

@@ -13,6 +13,16 @@
 #include "token.h"
 #include <stdio.h>
 
+// Max nesting of istring
+#define SCANNER_MAX_ISTRING_DEPTH 32
+
+// What the scanner reads inside istring
+typedef enum {
+    ISTRING_MODE_TEXT,      // The text of s"..."
+    ISTRING_MODE_MULTILINE, // The text of s"""..."""
+    ISTRING_MODE_EXPR,      // The expression inside ${...}
+} IStringMode;
+
 typedef struct {
     FILE *input;          // File with the source code
     int current;          // Current character
@@ -32,6 +42,9 @@ typedef struct {
     bool tab_in_indent;   // True, if there was a tab before the first token on the line
     int line_indent;      // Spaces at the start of the line, default -1
     bool after_comment;   // True, if a comment ended with line break on this line
+    IStringMode istring_modes[SCANNER_MAX_ISTRING_DEPTH]; // Open istring and ${
+    int istring_depth;                                    // Number of modes on stack
+    bool istring_end_pending;                             // True, if ISTRING_END has to be returned
 } Scanner;
 
 // Initialises the scanner to read from input, returns ERR_OK or ERR_INTERNAL
