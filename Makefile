@@ -8,7 +8,7 @@ CFLAGS ?= -std=c99 -Wall -Wextra -pedantic -g
 LDFLAGS ?=
 
 # Header search paths for modular development
-INCLUDES = -Isrc -Isrc/common -Isrc/scanner -Isrc/parser -Isrc/semantics -Isrc/semantic_analyzer -Isrc/codegen
+INCLUDES = -Isrc -Isrc/common -Isrc/scanner -Isrc/parser -Isrc/semantics -Isrc/semantic_analyzer -Isrc/generator -Isrc/codegen
 
 # Automatic dependency tracking (.d files)
 DEPFLAGS = -MMD -MP
