@@ -115,6 +115,15 @@ static ErrorCode _token_error(const Token *token, const char *message) {
     return ERR_LEXICAL;
 }
 
+static ErrorCode _indent_error(const Token *token, const char *message) {
+    position pos;
+    pos.line = token->line;
+    pos.column = token->column;
+
+    error_print(ERR_SYNTAX, pos, "%s", message);
+    return ERR_SYNTAX;
+}
+
 // Adds the current character to the buffer and moves to the next one
 static ErrorCode _add_char(Scanner *scanner) {
     if (!dstring_append_char(&scanner->buffer, (char)scanner->current)) {
@@ -629,7 +638,7 @@ static ErrorCode _check_indent(Scanner *scanner, Token *token, bool *made_token)
 
     // The indent must be the same as on the outer levels
     if (indent != scanner->indent_stack[scanner->indent_count - 1]) {
-        return _token_error(token, "indentation does not match any outer level");
+        return _indent_error(token, "indentation does not match any outer level");
     }
 
     // The first DEDENT is returned now, others with the next calls
@@ -1008,7 +1017,7 @@ ErrorCode scanner_get_next_token(Scanner *scanner, Token *token) {
     if (scanner->parenth_depth > 0 && scanner->at_line_start && scanner->current != ')') {
         int top = scanner->indent_stack[scanner->indent_count - 1];
         if (scanner->line_indent <= top) {
-            return _token_error(token, "continuation line must be indented more");
+            return _indent_error(token, "continuation line must be indented more");
         }
     }
 
