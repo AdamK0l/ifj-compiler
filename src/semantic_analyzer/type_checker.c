@@ -680,14 +680,14 @@ int check_expression(AstExpression *expr, Symtable *table, AstType **out_type) {
 
             symtable_push_scope(table);
             AstType *then_type = NULL;
-            res = check_block(expr->data.conditional.then_branch, table, NULL, &then_type);
+            res = check_block(expr->data.conditional.then_branch, table, table->enclosing_return_type, &then_type);
             symtable_pop_scope(table);
             if (res != ERR_OK) return res;
 
             if (expr->data.conditional.else_branch != NULL) {
                 symtable_push_scope(table);
                 AstType *else_type = NULL;
-                res = check_block(expr->data.conditional.else_branch, table, NULL, &else_type);
+                res = check_block(expr->data.conditional.else_branch, table, table->enclosing_return_type, &else_type);
                 symtable_pop_scope(table);
                 if (res != ERR_OK) return res;
 
@@ -735,8 +735,14 @@ int check_expression(AstExpression *expr, Symtable *table, AstType **out_type) {
                 symtable_insert_variable(table, param->name, param->type, false);
             }
 
+            bool prev_in_lambda = table->in_lambda;
+            table->in_lambda = true;
+
             AstType *body_type = NULL;
             res = check_block(expr->data.lambda.inside, table, NULL, &body_type);
+
+            table->in_lambda = prev_in_lambda;
+
             symtable_pop_scope(table);
             if (res != ERR_OK) return res;
 

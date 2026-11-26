@@ -433,7 +433,7 @@ int check_statement(AstStatement *stmt, Symtable *table, AstType *enclosing_retu
         }
 
         case AST_STATEMENT_RETURN: {
-            if (!enclosing_return_type) {
+            if (!table->in_function || table->in_lambda) {
                 error_print(ERR_SEM_OTHER, stmt->pos, "Return statement outside function body");
                 return ERR_SEM_OTHER;
             }
@@ -448,13 +448,20 @@ int check_statement(AstStatement *stmt, Symtable *table, AstType *enclosing_retu
                 ret_type = type_get_unit();
             }
 
+            AstType *expected_ret = enclosing_return_type ? enclosing_return_type : table->enclosing_return_type;
+            if (!expected_ret) {
+                error_print(ERR_SEM_TYPE, stmt->pos,
+                            "Function containing 'return' must have an explicit return type in its header");
+                return ERR_SEM_TYPE;
+            }
+
             // Spec section 2.3 rule 4: In a function with explicit Unit return type,
             // the returned value is evaluated and discarded.
-            if (enclosing_return_type->kind != AST_TYPE_UNIT &&
-                !type_is_compatible(enclosing_return_type, ret_type)) {
+            if (expected_ret->kind != AST_TYPE_UNIT &&
+                !type_is_compatible(expected_ret, ret_type)) {
                 error_print(ERR_SEM_TYPE, stmt->pos,
                             "Return value type mismatch: function expects '%s', but returned '%s'",
-                            ast_type_to_string(enclosing_return_type->kind),
+                            ast_type_to_string(expected_ret->kind),
                             ast_type_to_string(ret_type->kind));
                 return ERR_SEM_TYPE;
             }
@@ -553,8 +560,16 @@ int semantic_pass2(AstProgram *program, Symtable *table) {
             }
 
             // Check method body block
+            table->in_function = true;
+            table->enclosing_return_type = method->return_type;
+            table->in_lambda = false;
+
             AstType *body_return_type = NULL;
             int res = check_block(method->inside, table, method->return_type, &body_return_type);
+
+            table->in_function = false;
+            table->enclosing_return_type = NULL;
+
             if (res != ERR_OK) {
                 symtable_pop_scope(table);
                 return res;
@@ -604,8 +619,16 @@ int semantic_pass2(AstProgram *program, Symtable *table) {
         }
 
         // Check function body block
+        table->in_function = true;
+        table->enclosing_return_type = func->return_type;
+        table->in_lambda = false;
+
         AstType *body_return_type = NULL;
         int res = check_block(func->inside, table, func->return_type, &body_return_type);
+
+        table->in_function = false;
+        table->enclosing_return_type = NULL;
+
         if (res != ERR_OK) {
             symtable_pop_scope(table);
             return res;

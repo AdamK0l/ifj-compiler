@@ -23,6 +23,9 @@ Symtable *symtable_create(void) {
     table->extensions.items = NULL;
     table->extensions.count = 0;
     table->extensions.capacity = 0;
+    table->enclosing_return_type = NULL;
+    table->in_function = false;
+    table->in_lambda = false;
     // Push the initial global scope
     symtable_push_scope(table);
     table->global_scope = table->current_scope;
