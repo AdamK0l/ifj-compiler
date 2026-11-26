@@ -1,5 +1,5 @@
 % Dokumentácia projektu IFJ/IAL – IFJ26
-\documentclass{article}
+\documentclass[a4paper]{article}
 
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
@@ -247,18 +247,18 @@ TODO: BALINT
 
 Function \texttt{parser\_run} implements a recursive descent with one lookahead token from scanner.
 It checks the prolog \texttt{import ifj26.*} and processes definitions of functions and extension blocks.
-It builds\texttt{AstProgram} or returns syntax error.
+It builds \texttt{AstProgram} or returns syntax error.
 
 \subsubsection{Blocks and commands}
 
-Block structures are controlled by \texttt{INDENT} and texttt{DEDENT}.
-For commands starting with an identifier \texttt{parse\_id\_statement} decides by the following \texttt{=} if it is an assignment or an expression.
+Block structures are controlled by \texttt{INDENT} and \texttt{DEDENT}.\\
+When a command starts with an identifier \texttt{parse\_id\_statement} checks for \texttt{=} to decide between an assignment and an expression.
 
 \subsubsection{Precedence analysis of expressions (\texttt{expr\_parser.c})}
 
 Expressions are processed by stack automaton, that is doing so according to the precedence table, which distinguishes between unary and binary operators.
 
-
+\newpage
 \subsubsection*{Precedence table}
 \begin{table}[htbp]
   \centering
@@ -400,6 +400,7 @@ Expressions are processed by stack automaton, that is doing so according to the 
 \end{longtable}
 }
 
+\newpage
 \subsubsection*{LL table}
 {\footnotesize
 \setlength{\tabcolsep}{4pt}
@@ -468,6 +469,7 @@ Expressions are processed by stack automaton, that is doing so according to the 
 \end{longtable}
 }
 
+\newpage
 \subsection{Semantical analysis}
 
 \subsubsection{Symtable vv-BVS (\texttt{bst.h}, \texttt{bst.c})}
@@ -497,12 +499,32 @@ Then a type checking control begins, only automatic conversion we need to be awa
 \subsection{Code generator (\texttt{codegen.h}, \texttt{codegen.c})}
 
 Code generator takes the semantically checked and typed AST and writes the final IFJcode26 into the output stream or returns error 99.
-Expression evaluations is built on a data stack.
-A unified function calling convention for functions including lambdas passes arguments from left to right through the stack and a local frame is created (\texttt{CREATEFRAME}/\texttt{PUSHFRAME}).
+Expression evaluations are built on a data stack.
+A unified function calling convention for functions including lambdas passes arguments from left to right through the stack and a local frame is created (\texttt{CREATEFRAME}/ \texttt{PUSHFRAME}).
 Shadowing is solved by renaming \texttt{LF@<name>\$<uid>}.
 Only built-in functions actually used in the program are generated.
 
+\newpage
+\section{Modules}
 
+\begin{itemize}[leftmargin=1.5em]
+  \item \texttt{main.c} -- Compiler pipeline controller \texttt{stdin} $\to$ \texttt{stdout}
+  \item \texttt{ast.h}, \texttt{ast.c} -- AST node definitions, constructors, deep cloning and destructors
+  \item \texttt{dstring.h}, \texttt{dstring.c} -- Dynamically resizable string buffer
+  \item \texttt{errors.h}, \texttt{errors.c} -- Enum and formatted error reporting to \texttt{stderr}
+  \item \texttt{memory.h}, \texttt{memory.c} -- Safe allocation wrappers exiting with code 99 on failure
+  \item \texttt{scanner.h}, \texttt{scanner.c} -- Finite-state lexical analyzer with indentation stack and interpolated strings
+  \item \texttt{token.h}, \texttt{token.c} -- Structure, token/keyword/operator enums, and token helpers
+  \item \texttt{parser.h}, \texttt{parser.c}, \texttt{parser\_internal.h} -- LL(1) recursive-descent parser building \texttt{AstProgram}
+  \item \texttt{expr\_parser.c} -- bottom-up operator-precedence expression parser 
+  \item \texttt{bst.h}, \texttt{bst.c} -- height-balanced binary search tree (AVL) $O(\log n)$
+  \item \texttt{symtable.h}, \texttt{symtable.c} -- symbol table ADT managing lexical (\texttt{Scope}), stack, shadowing and extensions
+  \item \texttt{type\_checker.h}, \texttt{type\_checker.c} -- bottom-up expression type checking, compatibility rules (\texttt{Int} $\to$ \texttt{Double}) and writes \texttt{evaluated\_type} into AST
+  \item \texttt{semantics.h}, \texttt{semantics.c} -- two-pass semantic analyzer (\texttt{Pass 1} for global signatures and \texttt{@main}, \texttt{Pass 2} for function bodies and type inference)
+  \item \texttt{codegen.h}, \texttt{codegen.c} -- Translates typed \texttt{AstProgram} into IFJcode26 using stack-based evaluation
+\end{itemize}
+
+\newpage
 \section{Usage of AI}
 
 In our team we agreed that we should be able to use AI if it is allowed and we understand the code it created.
@@ -522,6 +544,7 @@ If any errors occurred we used AI for debugging, typically when working with mem
 
 When Adam was using AI in different chats, it struggled to understand context. Therefore he had to use a common \texttt{GEMINI.md} where all context was stored along with instructions how AI should behave.
 
+\newpage
 \addcontentsline{toc}{section}{References}
 \begin{thebibliography}{9}
   \bibitem{ifj_zadani}

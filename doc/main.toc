@@ -10,12 +10,13 @@
 \contentsline {subsubsection}{\numberline {3.2.1}Main LL(1) parser (\texttt {parser.h}, \texttt {parser.c}, \texttt {parser\_internal.h})}{4}{subsubsection.3.2.1}%
 \contentsline {subsubsection}{\numberline {3.2.2}Blocks and commands}{4}{subsubsection.3.2.2}%
 \contentsline {subsubsection}{\numberline {3.2.3}Precedence analysis of expressions (\texttt {expr\_parser.c})}{4}{subsubsection.3.2.3}%
-\contentsline {subsection}{\numberline {3.3}Semantical analysis}{8}{subsection.3.3}%
-\contentsline {subsubsection}{\numberline {3.3.1}Symtable vv-BVS (\texttt {bst.h}, \texttt {bst.c})}{8}{subsubsection.3.3.1}%
-\contentsline {subsubsection}{\numberline {3.3.2}Two pass semantic analysis (\texttt {semantics.h}, \texttt {semantics.c})}{8}{subsubsection.3.3.2}%
-\contentsline {subsubsection}{\numberline {3.3.3}System for type checking (\texttt {type\_checker.h}, \texttt {type\_checker.c})}{8}{subsubsection.3.3.3}%
-\contentsline {subsection}{\numberline {3.4}Code generator (\texttt {codegen.h}, \texttt {codegen.c})}{8}{subsection.3.4}%
-\contentsline {section}{\numberline {4}Usage of AI}{8}{section.4}%
-\contentsline {subsection}{\numberline {4.1}Typical usage of AI}{9}{subsection.4.1}%
-\contentsline {subsection}{\numberline {4.2}Problems with AI}{9}{subsection.4.2}%
-\contentsline {section}{References}{9}{subsection.4.2}%
+\contentsline {subsection}{\numberline {3.3}Semantical analysis}{10}{subsection.3.3}%
+\contentsline {subsubsection}{\numberline {3.3.1}Symtable vv-BVS (\texttt {bst.h}, \texttt {bst.c})}{10}{subsubsection.3.3.1}%
+\contentsline {subsubsection}{\numberline {3.3.2}Two pass semantic analysis (\texttt {semantics.h}, \texttt {semantics.c})}{10}{subsubsection.3.3.2}%
+\contentsline {subsubsection}{\numberline {3.3.3}System for type checking (\texttt {type\_checker.h}, \texttt {type\_checker.c})}{10}{subsubsection.3.3.3}%
+\contentsline {subsection}{\numberline {3.4}Code generator (\texttt {codegen.h}, \texttt {codegen.c})}{10}{subsection.3.4}%
+\contentsline {section}{\numberline {4}Modules}{11}{section.4}%
+\contentsline {section}{\numberline {5}Usage of AI}{12}{section.5}%
+\contentsline {subsection}{\numberline {5.1}Typical usage of AI}{12}{subsection.5.1}%
+\contentsline {subsection}{\numberline {5.2}Problems with AI}{12}{subsection.5.2}%
+\contentsline {section}{References}{13}{subsection.5.2}%

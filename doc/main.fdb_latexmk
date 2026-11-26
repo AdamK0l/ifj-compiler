@@ -1,7 +1,7 @@
 # Fdb version 4
-["pdflatex"] 1795714441.99707 "/home/adam/00_PERSONAL_FILES/00_SCHOOL/IFJ/01_projekt/ifj-compiler/doc/main.tex" "main.pdf" "main" 1795714443.34201 0
+["pdflatex"] 1795717218.59833 "/home/adam/00_PERSONAL_FILES/00_SCHOOL/IFJ/01_projekt/ifj-compiler/doc/main.tex" "main.pdf" "main" 1795717220.69869 0
   "/etc/texmf/web2c/texmf.cnf" 1791304013.07618 475 c0e671620eb5563b2130f56340a5fde8 ""
-  "/home/adam/00_PERSONAL_FILES/00_SCHOOL/IFJ/01_projekt/ifj-compiler/doc/main.tex" 1795714440.28852 37347 59b951113453ca0d345494c910833a00 ""
+  "/home/adam/00_PERSONAL_FILES/00_SCHOOL/IFJ/01_projekt/ifj-compiler/doc/main.tex" 1795717218.33957 39183 a22b6f329d38aebb90943e971bce682f ""
   "/usr/share/texlive/texmf-dist/fonts/enc/dvips/base/8r.enc" 1165713224 4850 80dc9bab7f31fb78a000ccfed0e27cab ""
   "/usr/share/texlive/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/adobe/times/ptmb8r.tfm" 1136768653 4524 6bce29db5bc272ba5f332261583fee9c ""
@@ -186,10 +186,10 @@
   "/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map" 1791304062 5541477 3118940318599480888143717dd32d64 ""
   "/var/lib/texmf/web2c/pdftex/pdflatex.fmt" 1791304084 3638532 23d453d8173bf2aa0ca46bd03ba1667b ""
   "logo.png" 1795695893.60372 53753 efb58c85a32b3b012af1e6079c34a232 ""
-  "main.aux" 1795714443.22705 3928 b735e480623a9c7cd6c8c3f7a2ec7c0f "pdflatex"
-  "main.out" 1795714443.22805 3826 4dc4b4b95c2f8df69b0ae53a6a18a4c6 "pdflatex"
-  "main.tex" 1795714440.28852 37347 59b951113453ca0d345494c910833a00 ""
-  "main.toc" 1795714443.22947 1974 39fd0330cd9dc2048b7a974109d8a862 "pdflatex"
+  "main.aux" 1795717220.55639 4042 a21e38377cf99bf0d4661d5208fc9f58 "pdflatex"
+  "main.out" 1795717220.55739 3905 6066ca0cebd0fe2dbe561f63adc702c0 "pdflatex"
+  "main.tex" 1795717218.33957 39183 a22b6f329d38aebb90943e971bce682f ""
+  "main.toc" 1795717220.55839 2047 1848f0337e8d79de00589fc210500dba "pdflatex"
   (generated)
   "main.aux"
   "main.log"
