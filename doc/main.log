@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.28 (TeX Live 2025/Debian) (preloaded format=pdflatex 2026.10.6)  26 NOV 2026 19:22
+This is pdfTeX, Version 3.141592653-2.6-1.40.28 (TeX Live 2025/Debian) (preloaded format=pdflatex 2026.10.6)  27 NOV 2026 00:23
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -776,7 +776,7 @@ Package hyperref Info: Link coloring OFF on input line 26.
 \@outlinefile=\write4
 \openout4 = `main.out'.
 
-<logo.png, id=90, 2922.92pt x 602.25pt>
+<logo.png, id=106, 2922.92pt x 602.25pt>
 File: logo.png Graphic file (type png)
 <use logo.png>
 Package pdftex.def Info: logo.png  used on input line 36.
@@ -801,30 +801,72 @@ LaTeX Font Info:    Trying to load font information for TS1+ptm on input line 9
  (/usr/share/texlive/texmf-dist/tex/latex/psnfss/ts1ptm.fd
 File: ts1ptm.fd 2001/06/04 font definitions for TS1/ptm.
 )
-[2] [3]
 LaTeX Font Info:    Font shape `T1/cmtt/bx/n' in size <7> not available
-(Font)              Font shape `T1/cmtt/m/n' tried instead on input line 206.
-LaTeX Font Info:    Font shape `T1/cmtt/bx/n' in size <10> not available
-(Font)              Font shape `T1/cmtt/m/n' tried instead on input line 246.
- [4] [5]
-ignored error: Infinite glue shrinkage found in box being split [6] [7]
-ignored error: Infinite glue shrinkage found in box being split [8] [9]
-LaTeX Font Info:    Font shape `T1/cmtt/bx/n' in size <12> not available
-(Font)              Font shape `T1/cmtt/m/n' tried instead on input line 499.
+(Font)              Font shape `T1/cmtt/m/n' tried instead on input line 205.
 
-[10] [11] [12] [13] (./main.aux)
+[2]
+Overfull \hbox (4.53175pt too wide) in paragraph at lines 247--249
+[]\T1/cmtt/m/n/10 scanner_get_next_token(Scanner *, Token *) \T1/ptm/m/n/10 - r
+e-turns \T1/cmtt/m/n/10 ERR_OK\T1/ptm/m/n/10 , \T1/cmtt/m/n/10 ERR_LEXICAL \T1/
+ptm/m/n/10 (1), or \T1/cmtt/m/n/10 ERR_INTERNAL \T1/ptm/m/n/10 (99), 
+ []
+
+
+Overfull \hbox (13.01437pt too wide) in paragraph at lines 253--256
+[]\T1/ptm/m/n/10 A to-ken (\T1/cmtt/m/n/10 token.h\T1/ptm/m/n/10 ) con-sists of
+ a type and an at-tribute. Key-words and op-er-a-tors have only one type each (
+\T1/cmtt/m/n/10 TOKEN_KEYWORD\T1/ptm/m/n/10 ,
+ []
+
+
+Overfull \hbox (34.87465pt too wide) in paragraph at lines 253--256
+\T1/cmtt/m/n/10 TOKEN_OPERATOR\T1/ptm/m/n/10 ); the con-crete key-word or op-er
+-a-tor is in the field \T1/cmtt/m/n/10 keyword \T1/ptm/m/n/10 or \T1/cmtt/m/n/1
+0 operator \T1/ptm/m/n/10 (enums \T1/cmtt/m/n/10 KeywordType\T1/ptm/m/n/10 ,\T1
+/cmtt/m/n/10 OperatorType\T1/ptm/m/n/10 ). 
+ []
+
+[3]
+<normal.jpeg, id=158, 1879.02pt x 1460.45625pt>
+File: normal.jpeg Graphic file (type jpg)
+<use normal.jpeg>
+Package pdftex.def Info: normal.jpeg  used on input line 294.
+(pdftex.def)             Requested size: 483.6882pt x 375.94356pt.
+<mode_selector.jpeg, id=159, 1570.86874pt x 737.75626pt>
+File: mode_selector.jpeg Graphic file (type jpg)
+<use mode_selector.jpeg>
+Package pdftex.def Info: mode_selector.jpeg  used on input line 301.
+(pdftex.def)             Requested size: 483.68047pt x 227.15984pt.
+<istr.jpeg, id=160, 1239.63126pt x 1412.27625pt>
+File: istr.jpeg Graphic file (type jpg)
+<use istr.jpeg>
+Package pdftex.def Info: istr.jpeg  used on input line 308.
+(pdftex.def)             Requested size: 483.68123pt x 551.04413pt.
+ [4] [5 <./normal.jpeg> <./mode_selector.jpeg>] [6 <./istr.jpeg>]
+LaTeX Font Info:    Font shape `T1/cmtt/bx/n' in size <10> not available
+(Font)              Font shape `T1/cmtt/m/n' tried instead on input line 316.
+
+ignored error: Infinite glue shrinkage found in box being split [7
+
+]
+ignored error: Infinite glue shrinkage found in box being split [8]
+ignored error: Infinite glue shrinkage found in box being split [9] [10]
+LaTeX Font Info:    Font shape `T1/cmtt/bx/n' in size <12> not available
+(Font)              Font shape `T1/cmtt/m/n' tried instead on input line 565.
+
+[11] [12] (./main.aux)
  ***********
 LaTeX2e <2025-11-01>
 L3 programming layer <2026-01-19>
  ***********
 Package rerunfilecheck Info: File `main.out' has not changed.
-(rerunfilecheck)             Checksum: 6066CA0CEBD0FE2DBE561F63ADC702C0;3905.
+(rerunfilecheck)             Checksum: 293C4A29620E06B9E4CEA9BCCE56C515;4590.
  ) 
 Here is how much of TeX's memory you used:
- 22824 strings out of 467533
- 424098 string characters out of 5422138
- 893300 words of memory out of 5000000
- 51292 multiletter control sequences out of 15000+600000
+ 22868 strings out of 467533
+ 424879 string characters out of 5422138
+ 902430 words of memory out of 5000000
+ 51325 multiletter control sequences out of 15000+600000
  690585 words of font info for 102 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
  84i,9n,104p,717b,1040s stack positions out of 10000i,1000n,20000p,200000b,200000s
@@ -840,10 +882,10 @@ hare/texmf/fonts/type1/public/cm-super/sftt1000.pfb></usr/share/texmf/fonts/typ
 e1/public/cm-super/sftt1200.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/
 times/utmb8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmr8a.pf
 b></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
-Output written on main.pdf (14 pages, 311226 bytes).
+Output written on main.pdf (13 pages, 958859 bytes).
 PDF statistics:
- 279 PDF objects out of 1000 (max. 8388607)
- 230 compressed objects within 3 object streams
- 48 named destinations out of 1000 (max. 500000)
- 186 words of extra memory for PDF output out of 10000 (max. 10000000)
+ 308 PDF objects out of 1000 (max. 8388607)
+ 257 compressed objects within 3 object streams
+ 59 named destinations out of 1000 (max. 500000)
+ 233 words of extra memory for PDF output out of 10000 (max. 10000000)
 

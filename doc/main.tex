@@ -131,7 +131,6 @@ We used pre-defined style LLVM with changes to indentation set to four spaces, m
 We implemented unit tests for syntax analysis, semantic analysis, extensions and also tests for possible memory leaks.
 We also used the interpreter \texttt{ic26int} for testing.
 
-\newpage
 %======================================================================
 \section{Implementation}
 %======================================================================
@@ -239,8 +238,79 @@ The whole process is orchestrated by \texttt{main.c} which reads \texttt{stdin}.
 If any error occurs, the compiler ends with the corresponding error code from \texttt{errors.h} and frees any used memory.
 \subsection{Lexical analysis}
 
-TODO: BALINT
+The scanner (\texttt{scanner.c}) is called by the parser, each call to
+\texttt{scanner\_get\_next\_token} returns a single token.
+To avoid global state, everything the scanner needs is encapsulated inside the \texttt{Scanner} struct.
 
+\begin{itemize}
+    \item \texttt{scanner\_init(Scanner *, FILE *)} - prepares input stream and internal buffers,
+    \item \texttt{scanner\_get\_next\_token(Scanner *, Token *)} - returns \texttt{ERR\_OK},
+          \texttt{ERR\_LEXICAL}~(1), or \texttt{ERR\_INTERNAL}~(99),
+    \item \texttt{scanner\_destroy(Scanner *)} - frees the allocated memory.
+\end{itemize}
+
+\subsubsection{Token}
+A token (\texttt{token.h}) consists of a type and an attribute. Keywords and operators have only
+one type each (\texttt{TOKEN\_KEYWORD}, \texttt{TOKEN\_OPERATOR}); the concrete keyword or operator
+is in the field \texttt{keyword} or \texttt{operator} (enums \texttt{KeywordType},\texttt{OperatorType}).
+
+Numeric literals store their parsed values in \texttt{int\_value} or \texttt{double\_value}. Identifiers and string literals hold a dynamically allocated copy of their text in \texttt{string}, which the final owner of the token is responsible for freeing with \texttt{token\_free}. Additionally, every token records its source line and column, with a \texttt{newline\_before} flag. This flag indicates whether a line break occurred since the last token. This is needed inside parentheses, where newlines do not generate standalone tokens.
+
+\subsubsection{Structure of the scanner}
+The scanner architecture is organized into five different layers:
+
+\begin{enumerate}
+    \item \textbf{Input} - Two-character window (\texttt{current} and \texttt{next}) to allow single-character lookahead.
+    \item \textbf{Lexeme automaton} - Implements the DFA. The \texttt{\_read\_token} function acts as the start state, branching via a \texttt{switch} on the initial character into specialized helpers like \texttt{\_read\_identifier}, \texttt{\_read\_number}, \texttt{\_read\_string}. Lexeme characters are accumulated in a single, reusable dynamic string.
+    \item \textbf{Keyword table} - A static lookup array of reserved words. Once an identifier is fully read, it is checked against this table.
+    \item \textbf{Layout} - Translates whitespace and line breaks into \texttt{EOL}, \texttt{INDENT}, and \texttt{DEDENT} tokens.
+    \item \textbf{Mode stack} - Tracks context for interpolated strings.
+\end{enumerate}
+
+\subsubsection{Deterministic finite automaton}
+When there is no transition for the next character, a final state ends the token and a non-final state means a lexical error. The implementation differs from a pure deterministic finite automaton in these points:
+
+\begin{itemize}
+    \item \textbf{Two-character lookahead.} A decimal point after digits is only consumed as part of a number if another digit immediately follows (so \texttt{5.x} tokenizes as \texttt{INT}, \texttt{DOT}, and \texttt{IDENTIFIER}). Similarly, a lone \texttt{\$} terminates an interpolated string segment, and \texttt{s"""} is recognised before the second and third quote are consumed.
+    \item \textbf{Keywords} do not have dedicated states. Instead, the ID state reads the entire word and looks it up in the keyword table. The same rule ensures that identifiers following \texttt{\$} in string interpolation are not keywords.
+    \item \textbf{Nested block comments} rely on an active comment counter $d$, which cannot be modeled with a finite state space.
+    \item \textbf{Multi-line string termination.} The automaton accepts any number of quotes at the
+      end; the code counts them while reading and adds all but the last three to the text.
+    \item \textbf{Interpolated strings} require a mode stack, effectively turning this component into a pushdown automaton.
+    \item \textbf{Layout} handling indentation, line breaks, and parentheses operate as an independent layer outside the automaton.
+\end{itemize}
+
+\subsubsection{Interpolated strings}
+
+An interpolated string such as \texttt{s"Hi \$name, \$\{n + 1\}!"} is broken down into a stream of tokens: \texttt{ISTRING\_BEGIN}, \texttt{ISTRING\_PART("Hi ")}, \texttt{ISTRING\_ID(name)}, \texttt{ISTRING\_PART(", ")}, \texttt{ISTRING\_EXPR\_BEGIN}, the standard tokens for the inner expression, \texttt{ISTRING\_EXPR\_END}, \texttt{ISTRING\_PART("!")}, and \texttt{ISTRING\_END}.
+
+To manage this, the scanner keeps a stack of three modes: TEXT (for \texttt{s"\ldots"}), MULTI
+(for \texttt{s"""\ldots"""}) and EXPR (for \texttt{\$\{\ldots\}}). Each call looks at the top of
+the stack. In the TEXT and MULTI modes the text is read without skipping whitespace or comments
+and without layout tokens. In EXPR mode, normal tokenization resumes until a closing \texttt{\}} pops the expression. Because the stack supports nesting, constructs like \texttt{s"a\$\{s"b"\}c"} are handled naturally. For multi-line strings, the closing \texttt{"""} is consumed together with the last part of the text, so the \texttt{ISTRING\_END} token is returned by the next call.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth, height=0.85\textheight, keepaspectratio]{normal.jpeg}
+    \caption{Deterministic finite automaton}
+    \label{fig:normal}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth, height=0.85\textheight, keepaspectratio]{mode_selector.jpeg}
+    \caption{Mode selector}
+    \label{fig:mode-selector}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth, height=0.85\textheight, keepaspectratio]{istr.jpeg}
+    \caption{Interpolated strings}
+    \label{fig:istr}
+\end{figure}
+
+\clearpage
 \subsection{Syntactical analysis}
 
 \subsubsection{Main LL(1) parser (\texttt{parser.h}, \texttt{parser.c}, \texttt{parser\_internal.h})}
@@ -258,7 +328,6 @@ When a command starts with an identifier \texttt{parse\_id\_statement} checks fo
 
 Expressions are processed by stack automaton, that is doing so according to the precedence table, which distinguishes between unary and binary operators.
 
-\newpage
 \subsubsection*{Precedence table}
 \begin{table}[htbp]
   \centering
@@ -284,7 +353,6 @@ Expressions are processed by stack automaton, that is doing so according to the 
   \label{tab:precedence}
 \end{table}
 
-\newpage
 \subsubsection*{LL grammar}
 {\footnotesize
 \setlength{\tabcolsep}{4pt}
@@ -400,7 +468,6 @@ Expressions are processed by stack automaton, that is doing so according to the 
 \end{longtable}
 }
 
-\newpage
 \subsubsection*{LL table}
 {\footnotesize
 \setlength{\tabcolsep}{4pt}
@@ -469,7 +536,6 @@ Expressions are processed by stack automaton, that is doing so according to the 
 \end{longtable}
 }
 
-\newpage
 \subsection{Semantical analysis}
 
 \subsubsection{Symtable vv-BVS (\texttt{bst.h}, \texttt{bst.c})}
@@ -504,7 +570,6 @@ A unified function calling convention for functions including lambdas passes arg
 Shadowing is solved by renaming \texttt{LF@<name>\$<uid>}.
 Only built-in functions actually used in the program are generated.
 
-\newpage
 \section{Modules}
 
 \begin{itemize}[leftmargin=1.5em]
@@ -544,7 +609,6 @@ If any errors occurred we used AI for debugging, typically when working with mem
 
 When Adam was using AI in different chats, it struggled to understand context. Therefore he had to use a common \texttt{GEMINI.md} where all context was stored along with instructions how AI should behave.
 
-\newpage
 \addcontentsline{toc}{section}{References}
 \begin{thebibliography}{9}
   \bibitem{ifj_zadani}
