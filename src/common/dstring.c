@@ -13,6 +13,17 @@
 
 #define DSTRING_INIT_CAPACITY 16
 
+/**
+ * @brief Ensures buffer capacity is at least min_capacity by geometric doubling.
+ *
+ * [AI-Generated / AI-Assisted]
+ * Tool: Google Gemini
+ * Prompt: "Write an internal helper that geometrically resizes dynamic string buffer using realloc"
+ *
+ * @param str Pointer to DynamicString.
+ * @param min_capacity Minimum required capacity in bytes.
+ * @return True on success, false on allocation failure.
+ */
 static bool _dstring_ensure_capacity(DynamicString *str, size_t min_capacity) {
     if (str->capacity >= min_capacity) {
         return true;
@@ -33,6 +44,16 @@ static bool _dstring_ensure_capacity(DynamicString *str, size_t min_capacity) {
     return true;
 }
 
+/**
+ * @brief Initializes a dynamic string with default initial capacity.
+ *
+ * [AI-Generated / AI-Assisted]
+ * Tool: Google Gemini
+ * Prompt: "Implement dstring_init to allocate an empty null-terminated string buffer"
+ *
+ * @param str Pointer to uninitialized DynamicString.
+ * @return True on success, false on allocation failure.
+ */
 bool dstring_init(DynamicString *str) {
     if (!str) {
         return false;
@@ -51,6 +72,11 @@ bool dstring_init(DynamicString *str) {
     return true;
 }
 
+/**
+ * @brief Deallocates the buffer and resets the string structure.
+ *
+ * @param str Pointer to DynamicString.
+ */
 void dstring_free(DynamicString *str) {
     if (!str) {
         return;
@@ -62,6 +88,11 @@ void dstring_free(DynamicString *str) {
     str->capacity = 0;
 }
 
+/**
+ * @brief Clears the contents without releasing the allocated buffer.
+ *
+ * @param str Pointer to DynamicString.
+ */
 void dstring_clear(DynamicString *str) {
     if (!str) {
         return;
@@ -73,6 +104,17 @@ void dstring_clear(DynamicString *str) {
     str->length = 0;
 }
 
+/**
+ * @brief Appends a single character and maintains null termination.
+ *
+ * [AI-Generated / AI-Assisted]
+ * Tool: Google Gemini
+ * Prompt: "Write dstring_append_char to append a character with automatic buffer growth"
+ *
+ * @param str Pointer to DynamicString.
+ * @param c Character to append.
+ * @return True on success, false on memory allocation failure.
+ */
 bool dstring_append_char(DynamicString *str, char c) {
     if (!str) {
         return false;
@@ -89,6 +131,17 @@ bool dstring_append_char(DynamicString *str, char c) {
     return true;
 }
 
+/**
+ * @brief Appends a null-terminated C string.
+ *
+ * [AI-Generated / AI-Assisted]
+ * Tool: Google Gemini
+ * Prompt: "Write dstring_append_str to append a string slice using memcpy"
+ *
+ * @param str Pointer to DynamicString.
+ * @param text Null-terminated string to append.
+ * @return True on success, false on allocation failure.
+ */
 bool dstring_append_str(DynamicString *str, const char *text) {
     if (!str || !text) {
         return false;
@@ -105,6 +158,17 @@ bool dstring_append_str(DynamicString *str, const char *text) {
     return true;
 }
 
+/**
+ * @brief Appends printf-style formatted text using vsnprintf.
+ *
+ * [AI-Generated / AI-Assisted]
+ * Tool: Google Gemini
+ * Prompt: "Implement dstring_append_format using two-pass vsnprintf with va_copy"
+ *
+ * @param str Pointer to DynamicString.
+ * @param format Printf format string.
+ * @return True on success, false on formatting or allocation failure.
+ */
 bool dstring_append_format(DynamicString *str, const char *format, ...) {
     if (!str || !format) {
         return false;
@@ -135,18 +199,43 @@ bool dstring_append_format(DynamicString *str, const char *format, ...) {
     return true;
 }
 
+/**
+ * @brief Compares two DynamicStrings lexicographically.
+ *
+ * @param a Pointer to first DynamicString.
+ * @param b Pointer to second DynamicString.
+ * @return 0 if equal, <0 if a < b, >0 if a > b.
+ */
 int dstring_compare(const DynamicString *a, const DynamicString *b) {
     const char *a_str = (a && a->data) ? a->data : "";
     const char *b_str = (b && b->data) ? b->data : "";
     return strcmp(a_str, b_str);
 }
 
+/**
+ * @brief Compares DynamicString with a null-terminated C string.
+ *
+ * @param a Pointer to DynamicString.
+ * @param text Null-terminated C string.
+ * @return 0 if equal, <0 if a < text, >0 if a > text.
+ */
 int dstring_compare_str(const DynamicString *a, const char *text) {
     const char *a_str = (a && a->data) ? a->data : "";
     const char *b_str = (text != NULL) ? text : "";
     return strcmp(a_str, b_str);
 }
 
+/**
+ * @brief Exports ownership of the internal heap buffer and resets the DynamicString.
+ * The caller becomes responsible for freeing the returned char* buffer.
+ *
+ * [AI-Generated / AI-Assisted]
+ * Tool: Google Gemini
+ * Prompt: "Write dstring_export that returns the buffer and resets the struct to avoid copying"
+ *
+ * @param str Pointer to DynamicString.
+ * @return Pointer to dynamically allocated null-terminated string.
+ */
 char *dstring_export(DynamicString *str) {
     if (!str) {
         return NULL;

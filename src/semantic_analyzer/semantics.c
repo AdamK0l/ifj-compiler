@@ -25,7 +25,11 @@ static AstType type_any = { AST_TYPE_ANY, { NULL, 0, NULL } };
 /* ==================== Helper Functions ==================== */
 
 /**
- * Allocates and populates an array of parameter types for built-in functions.
+ * @brief Allocates and populates an array of parameter types for built-in functions.
+ *
+ * [AI-Generated / AI-Assisted]
+ * Tool: Google Gemini
+ * Prompt: "Write a helper function to allocate and fill an array of AstType pointers"
  */
 static AstType **_alloc_params(size_t count, ...) {
     if (count == 0) {
@@ -42,7 +46,11 @@ static AstType **_alloc_params(size_t count, ...) {
 }
 
 /**
- * Registers all IFJ26 built-in functions into the global scope.
+ * @brief Inserts built-in IFJ26 functions into global scope.
+ * 
+ * [AI-Generated / AI-Assisted]
+ * Tool: Google Gemini 
+ * Prompt: "Write a function, that inserts all IFJ26 built-in functions into the symtable"
  */
 static void _register_builtins(Symtable *table) {
     symtable_insert_function(table, "print", &type_unit, _alloc_params(1, &type_any), 1, true);
@@ -59,7 +67,11 @@ static void _register_builtins(Symtable *table) {
 }
 
 /**
- * Calculates total number of parameters across all parameter lists.
+ * @brief Calculates total number of parameters across all parameter lists.
+ *
+ * [AI-Generated / AI-Assisted]
+ * Tool: Google Gemini
+ * Prompt: "Write a helper function to count total parameters across nested parameter lists in an AstFunction, so that I can use it when allocating memory"
  */
 static size_t _count_function_params(const AstFunction *func) {
     size_t total = 0;
@@ -70,7 +82,11 @@ static size_t _count_function_params(const AstFunction *func) {
 }
 
 /**
- * Extracts parameter types from a function into a flat array.
+ * @brief Extracts parameter types from a function into a flat array for symtable registration.
+ *
+ * [AI-Generated / AI-Assisted]
+ * Tool: Google Gemini
+ * Prompt: "Write a helper function, that extracts types from AstParameterLists into an array"
  */
 static AstType **_extract_param_types(const AstFunction *func, size_t *out_count) {
     size_t total = _count_function_params(func);
@@ -89,7 +105,11 @@ static AstType **_extract_param_types(const AstFunction *func, size_t *out_count
 }
 
 /**
- * Checks whether any parameter names are duplicated within the function declaration.
+ * @brief Checks whether any parameter names are duplicated within the function declaration.
+ *
+ * [AI-Generated / AI-Assisted]
+ * Tool: Google Gemini
+ * Prompt: "Write a function that checks for duplicate parameter names across all parameter lists of an AstFunction"
  */
 static bool _has_duplicate_parameters(const AstFunction *func) {
     size_t total = _count_function_params(func);
@@ -249,8 +269,13 @@ int semantic_pass1(AstProgram *program, Symtable *table) {
 
 /* ==================== Pass 2 Implementation ==================== */
 
-int check_statement(AstStatement *stmt, Symtable *table, AstType *enclosing_return_type, AstType **out_type);
-
+/**
+ * @brief Type checks an indented block of statements and evaluates its resulting type from the last statement.
+ *
+ * [AI-Generated / AI-Assisted]
+ * Tool: Google Gemini
+ * Prompt: "Write a check_block function that iterates through statements, validates each, and evaluates block return type from the last statement"
+ */
 int check_block(AstBLOCK *block, Symtable *table, AstType *enclosing_return_type, AstType **out_block_type) {
     if (!block) {
         if (out_block_type) {
