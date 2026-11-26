@@ -29,6 +29,13 @@ AstType *type_get_any(void) { return &_type_any; }
 
 /* ==================== Function Type & Block Helpers ==================== */
 
+/**
+ * @brief Constructs and deeply clones a composite function type (T1, T2, ...) => R.
+ *
+ * [AI-Generated / AI-Assisted]
+ * Tool: Google Gemini
+ * Prompt: "Write a helper function to construct an AST_TYPE_FUNCTION by deep-cloning parameter types and return type"
+ */
 static AstType *make_function_type(AstType **param_types, size_t param_count, AstType *return_type) {
     AstType **cloned_params = NULL;
     if (param_count > 0 && param_types != NULL) {
@@ -41,6 +48,13 @@ static AstType *make_function_type(AstType **param_types, size_t param_count, As
     return ast_type_create_function(cloned_params, param_count, cloned_result);
 }
 
+/**
+ * @brief Recursively checks whether a block (or any nested loop inside it) contains a return statement.
+ *
+ * [AI-Generated / AI-Assisted]
+ * Tool: Google Gemini
+ * Prompt: "Write a function to detect return statements in an AstBLOCK and nested loops for lambda validation"
+ */
 static bool _block_has_return(const AstBLOCK *block) {
     if (!block) return false;
     for (size_t i = 0; i < block->statements.count; i++) {
@@ -666,14 +680,14 @@ int check_expression(AstExpression *expr, Symtable *table, AstType **out_type) {
 
             symtable_push_scope(table);
             AstType *then_type = NULL;
-            res = check_block(expr->data.conditional.then_branch, table, NULL, &then_type);
+            res = check_block(expr->data.conditional.then_branch, table, table->enclosing_return_type, &then_type);
             symtable_pop_scope(table);
             if (res != ERR_OK) return res;
 
             if (expr->data.conditional.else_branch != NULL) {
                 symtable_push_scope(table);
                 AstType *else_type = NULL;
-                res = check_block(expr->data.conditional.else_branch, table, NULL, &else_type);
+                res = check_block(expr->data.conditional.else_branch, table, table->enclosing_return_type, &else_type);
                 symtable_pop_scope(table);
                 if (res != ERR_OK) return res;
 
@@ -721,8 +735,14 @@ int check_expression(AstExpression *expr, Symtable *table, AstType **out_type) {
                 symtable_insert_variable(table, param->name, param->type, false);
             }
 
+            bool prev_in_lambda = table->in_lambda;
+            table->in_lambda = true;
+
             AstType *body_type = NULL;
             res = check_block(expr->data.lambda.inside, table, NULL, &body_type);
+
+            table->in_lambda = prev_in_lambda;
+
             symtable_pop_scope(table);
             if (res != ERR_OK) return res;
 

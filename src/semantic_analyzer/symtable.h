@@ -47,6 +47,9 @@ typedef struct Symtable {
     Scope *current_scope;     // Pointer to the currently active innermost scope
     Scope *global_scope;
     ExtensionTable extensions; // Registered extension methods
+    AstType *enclosing_return_type; // Return type of the current function/method, or NULL if omitted/inferred
+    bool in_function;               // True when currently analyzing inside a function or method body
+    bool in_lambda;                 // True when currently analyzing inside a lambda expression
 } Symtable;
 
 /**

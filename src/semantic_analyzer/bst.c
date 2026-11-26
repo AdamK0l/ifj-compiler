@@ -10,25 +10,40 @@
 #include <stdlib.h>
 #include <string.h>
 
-
+/**
+ * @brief Returns height of a node (0 for NULL).
+ */
 static int _node_height(BstNode *node) {
     return (node != NULL) ? node->height : 0;
 }
 
+/**
+ * @brief Helper utility returning the maximum of two integers.
+ */
 static int _max(int a, int b) {
     return (a > b) ? a : b;
 }
 
+/**
+ * @brief Recalculates and updates node height based on child subtree heights.
+ */
 static void _update_height(BstNode *node) {
     if (node != NULL) {
         node->height = 1 + _max(_node_height(node->left), _node_height(node->right));
     }
 }
 
+/**
+ * @brief Computes the balance factor: height(left) - height(right).
+ * Valid AVL nodes maintain balance factor in {-1, 0, 1}.
+ */
 static int _balance_factor(BstNode *node) {
     return (node != NULL) ? (_node_height(node->left) - _node_height(node->right)) : 0;
 }
 
+/**
+ * @brief Allocates and initializes a new leaf node with height 1.
+ */
 static BstNode *_create_node(const char *key, SymbolData data) {
     BstNode *node = (BstNode *)safe_malloc(sizeof(BstNode));
     node->key = safe_strdup(key);
@@ -38,7 +53,9 @@ static BstNode *_create_node(const char *key, SymbolData data) {
     node->height = 1;
     return node;
 }
-
+/**
+ * @brief Performs a right rotation (LL rotation) around unbalanced node y.
+ */
 static BstNode *_rotate_right(BstNode *y){
     BstNode *x = y->left;
     BstNode *t2 = x->right;
@@ -52,6 +69,9 @@ static BstNode *_rotate_right(BstNode *y){
     return x;
 }
 
+/**
+ * @brief Performs a left rotation (RR rotation) around unbalanced node x.
+ */
 static BstNode *_rotate_left(BstNode *x) {
     BstNode *y = x->right;
     BstNode *t2 = y->left;
@@ -88,6 +108,7 @@ void bst_free(BstNode *root) {
         return;
     }
 
+    // Post-order traversal: free left and right subtrees first
     bst_free(root->left);
     bst_free(root->right);
 
@@ -114,7 +135,7 @@ BstNode *bst_insert(BstNode **root, const char *key, SymbolData data) {
     BstNode *inserted = NULL;
 
     if (cmp == 0) {
-        return NULL;
+        return NULL;        // Key already exists (duplicate)
     }
     else if (cmp < 0) {
         inserted = bst_insert(&((*root)->left), key, data);
@@ -130,17 +151,23 @@ BstNode *bst_insert(BstNode **root, const char *key, SymbolData data) {
     _update_height(*root);
 
     int balance = _balance_factor(*root);
+    
+    //REBALANCING
 
+    // Case 1: Left-Left (LL) -> Single Right Rotation
     if (balance > 1 && strcmp(key, (*root)->left->key) < 0) {
         *root = _rotate_right(*root);
     }
+    // Case 2: Right-Right (RR) -> Single Left Rotation
     else if (balance < -1 && strcmp(key, (*root)->right->key) > 0) {
         *root = _rotate_left(*root);
     }
+    // Case 3: Left-Right (LR) -> Left rotation on left child, then Right rotation on root
     else if (balance > 1 && strcmp(key, (*root)->left->key) > 0) {
         (*root)->left = _rotate_left((*root)->left);
         *root = _rotate_right(*root);
     }
+    // Case 4: Right-Left (RL) -> Right rotation on right child, then Left rotation on root
     else if (balance < -1 && strcmp(key, (*root)->right->key) < 0) {
         (*root)->right = _rotate_right((*root)->right);
         *root = _rotate_left(*root);
